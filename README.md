@@ -1,10 +1,13 @@
-# 验证码助手
+# 短信验证码助手 / SMS OTP Helper
 
 验证码助手是一个 LSPosed 模块，用于从短信或短信通知中提取验证码，并通过当前输入法自动填入。验证码会临时写入剪贴板，成功填入或过期后清理。
+
+![应用首页](docs/images/app-home.jpg)
 
 ## Beta 版说明
 
 - 当前版本：`1.0-beta.1`
+- 下载 APK：[sms-otp-helper-v1.0-beta.1.apk](releases/sms-otp-helper-v1.0-beta.1.apk)
 - 需要 Android 10+。
 - 需要在 LSPosed 中勾选短信 App 和当前输入法 App。
 - 安装或升级后建议重启手机，或至少强行停止短信 App 与当前输入法进程。
@@ -19,6 +22,10 @@
 
 ## 发布包
 
-Beta APK 位于：
+Beta APK：
 
-`app/build/outputs/apk/release/sms-helper-1.0-beta.1.apk`
+[`releases/sms-otp-helper-v1.0-beta.1.apk`](releases/sms-otp-helper-v1.0-beta.1.apk)
+
+SHA256：
+
+`A64A9127C0CC89C6A018AFB6185DAEA60FEA72901C134ED9F05CA4A93D3F86D1`

@@ -1,0 +1,70 @@
+name: Release APK
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK packages
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Create beta signing key
+        run: |
+          keytool -genkeypair \
+            -keystore "$RUNNER_TEMP/sms-helper-release.jks" \
+            -storepass android \
+            -keypass android \
+            -alias androiddebugkey \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -dname "CN=SMS OTP Helper"
+
+      - name: Build release APK
+        env:
+          SMS_RELEASE_KEYSTORE: ${{ runner.temp }}/sms-helper-release.jks
+          SMS_RELEASE_STORE_PASSWORD: android
+          SMS_RELEASE_KEY_ALIAS: androiddebugkey
+          SMS_RELEASE_KEY_PASSWORD: android
+        run: ./gradlew testReleaseUnitTest assembleRelease --no-daemon
+
+      - name: Prepare APK
+        run: |
+          mkdir -p release
+          cp app/build/outputs/apk/release/app-release.apk "release/sms-otp-helper-${GITHUB_REF_NAME}.apk"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PRERELEASE_FLAG=""
+          if [[ "${GITHUB_REF_NAME}" == *"beta"* || "${GITHUB_REF_NAME}" == *"alpha"* || "${GITHUB_REF_NAME}" == *"rc"* ]]; then
+            PRERELEASE_FLAG="--prerelease"
+          fi
+          gh release create "${GITHUB_REF_NAME}" release/*.apk \
+            --title "SMS OTP Helper ${GITHUB_REF_NAME}" \
+            --notes "短信验证码助手 / SMS OTP Helper beta release." \
+            ${PRERELEASE_FLAG}

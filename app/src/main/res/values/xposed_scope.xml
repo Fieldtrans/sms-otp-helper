@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="xposed_scope">
+        <item>com.android.mms</item>
+        <item>com.google.android.apps.messaging</item>
+        <item>com.miui.smsextra</item>
+        <item>com.miui.contentextension</item>
+        <item>com.google.android.inputmethod.latin</item>
+        <item>com.android.inputmethod.latin</item>
+        <item>com.miui.inputmethod</item>
+        <item>com.miui.keyboard</item>
+        <item>com.sohu.inputmethod.sogou</item>
+        <item>com.sohu.inputmethod.sogou.xiaomi</item>
+        <item>com.baidu.input</item>
+        <item>com.iflytek.inputmethod</item>
+        <item>com.tencent.qqpinyin</item>
+        <item>com.tencent.wetype</item>
+    </string-array>
+</resources>

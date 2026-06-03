@@ -135,7 +135,12 @@ private fun LspModuleScreen(
         lastSmsBody = CodeStore.getLastSmsBody(context)
         lastCodeAt = CodeStore.getLastCodeSavedAtMs(context)
         smsPermissionGranted = hasSmsPermission(context)
-        clipboardOtpState = readPendingOtpState(context)
+        clipboardOtpState = resolveOtpState(
+            context = context,
+            readClipboard = readClipboard,
+            currentState = clipboardOtpState,
+            nowMs = nowMs,
+        )
         receiveDiagnostic = CodeStore.getReceiveDiagnostic(context)
         clipboardBridgeEnabled = CodeStore.isClipboardBridgeEnabled(context)
         codeHistory = CodeStore.getCodeHistory(context)
@@ -178,7 +183,7 @@ private fun LspModuleScreen(
         }
         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
         val clipListener = ClipboardManager.OnPrimaryClipChangedListener {
-            refreshStatus(readClipboard = false)
+            refreshStatus(readClipboard = true)
         }
         clipboard?.addPrimaryClipChangedListener(clipListener)
         refreshStatus(readClipboard = true)
@@ -750,6 +755,43 @@ private fun readPendingOtpState(context: Context): ClipboardOtpState {
         code = pending.code,
         createdAtMs = pending.savedAtMs,
     )
+}
+
+private fun resolveOtpState(
+    context: Context,
+    readClipboard: Boolean,
+    currentState: ClipboardOtpState,
+    nowMs: Long,
+): ClipboardOtpState {
+    val pending = readPendingOtpState(context)
+    if (pending.remainingMs(nowMs) > 0L) {
+        return pending
+    }
+
+    val recentCode = CodeStore.getLastCode(context)
+    val recentAtMs = CodeStore.getLastCodeSavedAtMs(context)
+    if (recentCode.isNotBlank() && recentAtMs > 0L && nowMs - recentAtMs in 0 until CLIP_TTL_MS) {
+        return ClipboardOtpState(recentCode, recentAtMs)
+    }
+
+    if (readClipboard) {
+        val clipboard = readClipboardOtpState(context)
+        if (clipboard.remainingMs(nowMs) > 0L) {
+            CodeStore.saveReceiveDiagnostic(
+                context,
+                "clipboard",
+                context.packageName,
+                "前台检测到临时剪贴板验证码",
+                clipboard.code,
+            )
+            return clipboard
+        }
+    }
+
+    if (currentState.remainingMs(nowMs) > 0L) {
+        return currentState
+    }
+    return ClipboardOtpState()
 }
 
 private fun readClipboardOtpState(context: Context): ClipboardOtpState {

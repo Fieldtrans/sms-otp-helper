@@ -40,7 +40,11 @@ public class VerifyHook implements IXposedHookLoadPackage {
     private static final String SELF_PACKAGE = "com.example.sms";
     private static final String CLIP_LABEL_PREFIX = "CodeDelayLSP:";
     private static final String CLIP_FILLED_MARK = "filled:";
-    private static final Pattern OTP_PATTERN = Pattern.compile("(?<!\\d)(\\d{4,8})(?!\\d)");
+    private static final Pattern OTP_PATTERN = Pattern.compile(
+            "(?:验证码|校验码|动态码|短信码|确认码|安全码|verification\\s*code|verify\\s*code|otp|code)\\D{0,20}(\\d{4,8})"
+                    + "|(\\d{4,8})\\D{0,20}(?:验证码|校验码|动态码|短信码|确认码|安全码)",
+            Pattern.CASE_INSENSITIVE
+    );
     private static final long DEFAULT_DELAY_MS = 1200L;
     private static final long CLIPBOARD_CHANGE_DELAY_MS = 250L;
     private static final long DUPLICATE_WINDOW_MS = 12_000L;
@@ -460,7 +464,13 @@ public class VerifyHook implements IXposedHookLoadPackage {
         if (!matcher.find()) {
             return "";
         }
-        return matcher.groupCount() >= 1 ? matcher.group(1) : matcher.group();
+        for (int i = 1; i <= matcher.groupCount(); i++) {
+            String group = matcher.group(i);
+            if (!TextUtils.isEmpty(group)) {
+                return group;
+            }
+        }
+        return matcher.group();
     }
 
     private boolean isDuplicateCode(String code) {

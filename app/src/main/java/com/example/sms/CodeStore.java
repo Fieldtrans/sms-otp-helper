@@ -32,7 +32,11 @@ public final class CodeStore {
     private static final String KEY_DIAG_CODE = "diag_code";
     private static final String KEY_DIAG_AT_MS = "diag_at_ms";
 
-    private static final String DEFAULT_REGEX = "(?<!\\d)(\\d{4,8})(?!\\d)";
+    private static final String LEGACY_DEFAULT_REGEX = "(?<!\\d)(\\d{4,8})(?!\\d)";
+    private static final String DEFAULT_REGEX =
+            "(?:验证码|校验码|动态码|短信码|确认码|安全码|verification\\s*code|verify\\s*code|otp|code)\\D{0,20}(\\d{4,8})"
+                    + "|(\\d{4,8})\\D{0,20}(?:验证码|校验码|动态码|短信码|确认码|安全码)";
+    private static final Pattern DEFAULT_CODE_PATTERN = Pattern.compile(DEFAULT_REGEX, Pattern.CASE_INSENSITIVE);
     private static final long CODE_TTL_MS = 10 * 60_000L; // 10分钟，方便调试
     private static final long HISTORY_TTL_MS = 10 * 60_000L;
     private static final int HISTORY_LIMIT = 20;
@@ -218,18 +222,42 @@ public final class CodeStore {
         if (text == null || text.length() == 0) {
             return "";
         }
+        if (isDefaultRegex(regex)) {
+            return extractDefaultCode(text);
+        }
         try {
             Matcher matcher = Pattern.compile(regex).matcher(text);
             if (matcher.find()) {
-                return matcher.groupCount() >= 1 ? matcher.group(1) : matcher.group();
+                return firstMatchedGroup(matcher);
             }
         } catch (Throwable ignored) {
-            Matcher fallback = Pattern.compile(DEFAULT_REGEX).matcher(text);
-            if (fallback.find()) {
-                return fallback.group(1);
-            }
+            return extractDefaultCode(text);
         }
         return "";
+    }
+
+    private static boolean isDefaultRegex(String regex) {
+        return regex == null || regex.length() == 0
+                || DEFAULT_REGEX.equals(regex)
+                || LEGACY_DEFAULT_REGEX.equals(regex);
+    }
+
+    private static String extractDefaultCode(CharSequence text) {
+        Matcher matcher = DEFAULT_CODE_PATTERN.matcher(text);
+        if (!matcher.find()) {
+            return "";
+        }
+        return firstMatchedGroup(matcher);
+    }
+
+    private static String firstMatchedGroup(Matcher matcher) {
+        for (int i = 1; i <= matcher.groupCount(); i++) {
+            String group = matcher.group(i);
+            if (group != null && group.length() > 0) {
+                return group;
+            }
+        }
+        return matcher.group();
     }
 
     public static void ensurePrefsReadable(Context context) {

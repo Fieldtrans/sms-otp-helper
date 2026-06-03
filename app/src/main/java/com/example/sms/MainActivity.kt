@@ -294,7 +294,7 @@ private fun LspModuleScreen(
 
             SectionCard(
                 title = "当前验证码",
-                summary = "这里显示准备自动填入的验证码，填入后会清空，90 秒后自动失效。",
+                summary = "这里显示准备自动填入的验证码，填入后会标记，90 秒后自动失效。",
             ) {
                 SimulateSmsButton(onClick = ::simulateSmsReceipt)
                 Spacer(Modifier.height(12.dp))

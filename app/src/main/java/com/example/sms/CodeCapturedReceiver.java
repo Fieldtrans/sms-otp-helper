@@ -36,6 +36,7 @@ public class CodeCapturedReceiver extends BroadcastReceiver {
         String packageName = intent.getStringExtra(Actions.EXTRA_PACKAGE);
         CodeStore.saveCapturedCode(context, code, source == null ? "notification" : source, preview == null ? "" : preview);
         CodeStore.saveReceiveDiagnostic(context, source == null ? "notification" : source, packageName == null ? "" : packageName, preview == null ? "" : preview, code);
+        OtpNotifier.notifyReady(context, code);
 
         sendStatusUpdate(context);
     }

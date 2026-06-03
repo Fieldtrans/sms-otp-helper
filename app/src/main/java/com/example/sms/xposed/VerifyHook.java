@@ -45,6 +45,7 @@ public class VerifyHook implements IXposedHookLoadPackage {
     private static final long DEFAULT_DELAY_MS = 1200L;
     private static final long CLIPBOARD_CHANGE_DELAY_MS = 250L;
     private static final long DUPLICATE_WINDOW_MS = 12_000L;
+    private static final long FILL_DUPLICATE_WINDOW_MS = 60_000L;
     private static final long CLIP_TTL_MS = 90_000L;
     private static final Set<String> SMS_PACKAGES = new HashSet<>(Arrays.asList(
             "com.android.mms",
@@ -61,6 +62,8 @@ public class VerifyHook implements IXposedHookLoadPackage {
     private static final Set<String> hookedImePackages = new HashSet<>();
     private static String lastCopiedCode = "";
     private static long lastCopiedAt = 0L;
+    private static String lastFilledKey = "";
+    private static long lastFilledAt = 0L;
 
     @Override
     public void handleLoadPackage(XC_LoadPackage.LoadPackageParam lpparam) {
@@ -415,15 +418,31 @@ public class VerifyHook implements IXposedHookLoadPackage {
             if (inputConnection == null) {
                 return;
             }
-            String clipboardCode = readOtpFromClipboard(context);
-            if (TextUtils.isEmpty(clipboardCode)) {
+            ClipboardOtp clipboardOtp = readOtpFromClipboard(context);
+            if (clipboardOtp.isEmpty() || isRecentlyFilled(clipboardOtp.key)) {
                 return;
             }
-            if (inputConnection.commitText(clipboardCode, 1)) {
-                markManagedClipboardFilled(context, clipboardCode);
-                notifyCodeFilled(context, clipboardCode);
+            if (inputConnection.commitText(clipboardOtp.code, 1)) {
+                rememberFilled(clipboardOtp.key);
+                markManagedClipboardFilled(context, clipboardOtp.code);
+                notifyCodeFilled(context, clipboardOtp.code);
             }
         }, Math.max(0L, delayMs));
+    }
+
+    private boolean isRecentlyFilled(String key) {
+        if (TextUtils.isEmpty(key) || !TextUtils.equals(lastFilledKey, key)) {
+            return false;
+        }
+        return SystemClock.elapsedRealtime() - lastFilledAt < FILL_DUPLICATE_WINDOW_MS;
+    }
+
+    private void rememberFilled(String key) {
+        if (TextUtils.isEmpty(key)) {
+            return;
+        }
+        lastFilledKey = key;
+        lastFilledAt = SystemClock.elapsedRealtime();
     }
 
     private void notifyCodeFilled(Context context, String code) {
@@ -437,30 +456,34 @@ public class VerifyHook implements IXposedHookLoadPackage {
         }
     }
 
-    private String readOtpFromClipboard(Context context) {
+    private ClipboardOtp readOtpFromClipboard(Context context) {
         try {
             ClipboardManager clipboard = (ClipboardManager) context.getSystemService(Context.CLIPBOARD_SERVICE);
             if (clipboard == null || !clipboard.hasPrimaryClip()) {
-                return "";
+                return ClipboardOtp.EMPTY;
             }
             ClipMeta meta = parseClipMeta(clipboard.getPrimaryClipDescription());
             if (meta.isFilled) {
-                return "";
+                return ClipboardOtp.EMPTY;
             }
             if (meta.isManaged
                     && meta.createdAtMs > 0L
                     && System.currentTimeMillis() - meta.createdAtMs > CLIP_TTL_MS) {
                 clearManagedClipboardIfSame(context, meta.createdAtMs);
-                return "";
+                return ClipboardOtp.EMPTY;
             }
             ClipData data = clipboard.getPrimaryClip();
             if (data == null || data.getItemCount() == 0) {
-                return "";
+                return ClipboardOtp.EMPTY;
             }
             CharSequence text = data.getItemAt(0).coerceToText(context);
-            return meta.isManaged ? CodeStore.extractToken(text) : "";
+            String code = meta.isManaged ? CodeStore.extractToken(text) : "";
+            if (TextUtils.isEmpty(code)) {
+                return ClipboardOtp.EMPTY;
+            }
+            return new ClipboardOtp(code, meta.createdAtMs + ":" + code);
         } catch (Throwable ignored) {
-            return "";
+            return ClipboardOtp.EMPTY;
         }
     }
 
@@ -653,6 +676,22 @@ public class VerifyHook implements IXposedHookLoadPackage {
             this.isManaged = isManaged;
             this.isFilled = isFilled;
             this.createdAtMs = createdAtMs;
+        }
+    }
+
+    private static final class ClipboardOtp {
+        private static final ClipboardOtp EMPTY = new ClipboardOtp("", "");
+
+        private final String code;
+        private final String key;
+
+        private ClipboardOtp(String code, String key) {
+            this.code = code == null ? "" : code;
+            this.key = key == null ? "" : key;
+        }
+
+        private boolean isEmpty() {
+            return TextUtils.isEmpty(code) || TextUtils.isEmpty(key);
         }
     }
 }

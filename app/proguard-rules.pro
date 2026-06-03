@@ -20,5 +20,5 @@
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
 
--keep class com.example.sms.xposed.VerifyHook { *; }
+-keep class com.example.sms.xposed.** { *; }
 -keep class com.example.sms.LspModuleState { *; }

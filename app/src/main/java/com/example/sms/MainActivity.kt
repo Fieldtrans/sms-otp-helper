@@ -108,6 +108,7 @@ private fun LspModuleScreen(
     var lastSmsBody by remember { mutableStateOf(CodeStore.getLastSmsBody(context)) }
     var lastCodeAt by remember { mutableLongStateOf(CodeStore.getLastCodeSavedAtMs(context)) }
     var smsPermissionGranted by remember { mutableStateOf(hasSmsPermission(context)) }
+    var notificationPermissionGranted by remember { mutableStateOf(hasNotificationPermission(context)) }
     var clipboardOtpState by remember { mutableStateOf(readPendingOtpState(context)) }
     var receiveDiagnostic by remember { mutableStateOf(CodeStore.getReceiveDiagnostic(context)) }
     var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -127,6 +128,14 @@ private fun LspModuleScreen(
             openAppPermissionSettings(context)
         }
     }
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        notificationPermissionGranted = granted
+        if (!granted) {
+            openAppPermissionSettings(context)
+        }
+    }
 
     fun refreshStatus(readClipboard: Boolean = false) {
         lastCode = CodeStore.getLastCode(context)
@@ -134,6 +143,7 @@ private fun LspModuleScreen(
         lastSmsBody = CodeStore.getLastSmsBody(context)
         lastCodeAt = CodeStore.getLastCodeSavedAtMs(context)
         smsPermissionGranted = hasSmsPermission(context)
+        notificationPermissionGranted = hasNotificationPermission(context)
         clipboardOtpState = resolveOtpState(
             context = context,
             readClipboard = readClipboard,
@@ -219,6 +229,7 @@ private fun LspModuleScreen(
         CodeStore.saveReceiveDiagnostic(context, "manual-test", context.packageName, body, code)
         try {
             ClipboardFallback.write(context, code)
+            OtpNotifier.notifyReady(context, code)
         } catch (_: Throwable) {
         }
         val updateIntent = Intent(Actions.ACTION_SMS_STATUS_UPDATED).setPackage(context.packageName)
@@ -286,6 +297,21 @@ private fun LspModuleScreen(
                     } else {
                         {
                             smsPermissionLauncher.launch(Manifest.permission.RECEIVE_SMS)
+                        }
+                    },
+                )
+                StatusRow(
+                    label = "通知权限",
+                    value = if (notificationPermissionGranted) "已授权" else "未授权",
+                    onClick = if (notificationPermissionGranted) {
+                        null
+                    } else {
+                        {
+                            if (Build.VERSION.SDK_INT >= 33) {
+                                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            } else {
+                                openAppPermissionSettings(context)
+                            }
                         }
                     },
                 )
@@ -713,6 +739,13 @@ private fun hasSmsPermission(context: Context): Boolean {
     return ContextCompat.checkSelfPermission(
         context,
         Manifest.permission.RECEIVE_SMS,
+    ) == PackageManager.PERMISSION_GRANTED
+}
+
+private fun hasNotificationPermission(context: Context): Boolean {
+    return Build.VERSION.SDK_INT < 33 || ContextCompat.checkSelfPermission(
+        context,
+        Manifest.permission.POST_NOTIFICATIONS,
     ) == PackageManager.PERMISSION_GRANTED
 }
 

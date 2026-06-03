@@ -10,6 +10,7 @@
 - 下载 APK：[sms-otp-helper-v1.0-beta.1.apk](releases/sms-otp-helper-v1.0-beta.1.apk)
 - 需要 Android 10+。
 - 需要在 LSPosed 中勾选短信 App 和当前输入法 App。
+- Android 13+ 需要授予通知权限，收到验证码时会显示“验证码已就绪”提示。
 - 安装或升级后建议重启手机，或至少强行停止短信 App 与当前输入法进程。
 
 ## 基本流程
@@ -28,4 +29,4 @@ Beta APK：
 
 SHA256：
 
-`7AF3C3438D187EB6C77E31A4EB55BE9D10EA2E76CB03AE800EFDC0FC41094DC4`
+`3128687CA7A5F599C23049808547217EA6679EA60E98F0B7521A1BB2CBD53B7C`

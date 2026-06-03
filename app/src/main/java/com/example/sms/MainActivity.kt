@@ -176,7 +176,6 @@ private fun LspModuleScreen(
                 if (intent?.action == Actions.ACTION_SMS_STATUS_UPDATED) {
                     refreshStatus(readClipboard = true)
                 } else if (intent?.action == Actions.ACTION_CODE_FILLED) {
-                    CodeStore.clearPendingCode(context)
                     refreshStatus(readClipboard = false)
                 }
             }
@@ -220,8 +219,7 @@ private fun LspModuleScreen(
         CodeStore.saveSmsReceipt(context, body, code)
         CodeStore.saveReceiveDiagnostic(context, "manual-test", context.packageName, body, code)
         try {
-            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-            clipboard?.setPrimaryClip(ClipData.newPlainText("$MANAGED_CLIP_LABEL_PREFIX$now", code))
+            ClipboardFallback.write(context, code)
         } catch (_: Throwable) {
         }
         val updateIntent = Intent(Actions.ACTION_SMS_STATUS_UPDATED).setPackage(context.packageName)

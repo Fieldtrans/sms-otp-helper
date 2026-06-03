@@ -1,8 +1,6 @@
 package com.example.sms;
 
 import android.content.BroadcastReceiver;
-import android.content.ClipData;
-import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
 import android.provider.Telephony;
@@ -34,18 +32,7 @@ public class OtpSmsReceiver extends BroadcastReceiver {
 
         // 如果提取到验证码，复制到剪贴板
         if (!TextUtils.isEmpty(code)) {
-            try {
-                ClipboardManager clipboard = (ClipboardManager)
-                    context.getSystemService(Context.CLIPBOARD_SERVICE);
-                if (clipboard != null) {
-                    ClipData clip = ClipData.newPlainText(
-                        "CodeDelayLSP:" + System.currentTimeMillis(),
-                        code
-                    );
-                    clipboard.setPrimaryClip(clip);
-                }
-            } catch (Throwable ignored) {
-            }
+            ClipboardFallback.write(context, code);
         }
 
         // 通知 UI 刷新

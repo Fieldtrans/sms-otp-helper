@@ -266,8 +266,10 @@ public class VerifyHook implements IXposedHookLoadPackage {
             if (clipboard == null) {
                 return;
             }
-            String label = buildClipLabel(System.currentTimeMillis());
+            long createdAtMs = System.currentTimeMillis();
+            String label = buildClipLabel(createdAtMs);
             clipboard.setPrimaryClip(ClipData.newPlainText(label, code));
+            scheduleManagedClipboardClear(context, createdAtMs);
             notifyModuleApp(context, code, text);
             lastCopiedCode = code;
             lastCopiedAt = SystemClock.elapsedRealtime();
@@ -353,7 +355,7 @@ public class VerifyHook implements IXposedHookLoadPackage {
             if (meta.isManaged
                     && meta.createdAtMs > 0L
                     && System.currentTimeMillis() - meta.createdAtMs > CLIP_TTL_MS) {
-                clearManagedClipboard(context);
+                clearManagedClipboardIfSame(context, meta.createdAtMs);
                 return "";
             }
             ClipData data = clipboard.getPrimaryClip();
@@ -392,9 +394,40 @@ public class VerifyHook implements IXposedHookLoadPackage {
             if (!meta.isManaged) {
                 return;
             }
-            long now = System.currentTimeMillis();
-            clipboard.setPrimaryClip(ClipData.newPlainText(buildFilledClipLabel(now), code == null ? "" : code));
-            new Handler(Looper.getMainLooper()).postDelayed(() -> clearManagedClipboard(context), CLIP_TTL_MS);
+            long createdAtMs = meta.createdAtMs > 0L ? meta.createdAtMs : System.currentTimeMillis();
+            long ageMs = System.currentTimeMillis() - createdAtMs;
+            if (ageMs < 0L || ageMs > CLIP_TTL_MS) {
+                clearManagedClipboardIfSame(context, createdAtMs);
+                return;
+            }
+            clipboard.setPrimaryClip(ClipData.newPlainText(buildFilledClipLabel(createdAtMs), code == null ? "" : code));
+            scheduleManagedClipboardClear(context, createdAtMs);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private void scheduleManagedClipboardClear(Context context, long createdAtMs) {
+        if (context == null || createdAtMs <= 0L) {
+            return;
+        }
+        long remainingMs = Math.max(0L, CLIP_TTL_MS - (System.currentTimeMillis() - createdAtMs));
+        new Handler(Looper.getMainLooper()).postDelayed(
+                () -> clearManagedClipboardIfSame(context, createdAtMs),
+                remainingMs
+        );
+    }
+
+    private void clearManagedClipboardIfSame(Context context, long createdAtMs) {
+        try {
+            ClipboardManager clipboard = (ClipboardManager) context.getSystemService(Context.CLIPBOARD_SERVICE);
+            if (clipboard == null || !clipboard.hasPrimaryClip()) {
+                return;
+            }
+            ClipMeta meta = parseClipMeta(clipboard.getPrimaryClipDescription());
+            if (!meta.isManaged || meta.createdAtMs != createdAtMs) {
+                return;
+            }
+            clipboard.setPrimaryClip(ClipData.newPlainText("", ""));
         } catch (Throwable ignored) {
         }
     }

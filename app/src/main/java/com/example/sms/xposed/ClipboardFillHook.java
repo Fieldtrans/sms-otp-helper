@@ -22,6 +22,7 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage;
 public class ClipboardFillHook implements IXposedHookLoadPackage {
     private static final String SELF_PACKAGE = "com.example.sms";
     private static final String MANAGED_CLIP_PREFIX = "CodeDelayLSP:";
+    private static final String FILLED_MARK = "filled:";
     private static final long CLIP_TTL_MS = 90_000L;
     private static WeakReference<EditText> lastFocusedEditText = new WeakReference<>(null);
 
@@ -119,8 +120,22 @@ public class ClipboardFillHook implements IXposedHookLoadPackage {
             editText.setText(code);
             editText.setSelection(code.length());
 
-            // 清空剪贴板
-            clipboard.setPrimaryClip(ClipData.newPlainText("", ""));
+            // Mark as filled and keep the original TTL.
+            String labelText = label.toString();
+            long filledTimestamp = Long.parseLong(labelText.substring(labelText.lastIndexOf(':') + 1));
+            clipboard.setPrimaryClip(ClipData.newPlainText(MANAGED_CLIP_PREFIX + FILLED_MARK + filledTimestamp, code));
+            new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                try {
+                    if (!clipboard.hasPrimaryClip()) {
+                        return;
+                    }
+                    CharSequence currentLabel = clipboard.getPrimaryClipDescription().getLabel();
+                    if (currentLabel != null && currentLabel.toString().endsWith(String.valueOf(filledTimestamp))) {
+                        clipboard.setPrimaryClip(ClipData.newPlainText("", ""));
+                    }
+                } catch (Throwable ignored) {
+                }
+            }, Math.max(0L, CLIP_TTL_MS - (System.currentTimeMillis() - filledTimestamp)));
         } catch (Throwable ignored) {
         }
     }

@@ -12,7 +12,6 @@ public class CodeCapturedReceiver extends BroadcastReceiver {
             return;
         }
         if (Actions.ACTION_CODE_FILLED.equals(intent.getAction())) {
-            CodeStore.clearPendingCode(context);
             sendStatusUpdate(context);
             return;
         }

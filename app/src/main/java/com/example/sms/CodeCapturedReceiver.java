@@ -16,6 +16,15 @@ public class CodeCapturedReceiver extends BroadcastReceiver {
             sendStatusUpdate(context);
             return;
         }
+        if (Actions.ACTION_RECEIVE_DIAGNOSTIC.equals(intent.getAction())) {
+            String source = intent.getStringExtra(Actions.EXTRA_SOURCE);
+            String preview = intent.getStringExtra(Actions.EXTRA_PREVIEW);
+            String packageName = intent.getStringExtra(Actions.EXTRA_PACKAGE);
+            String code = intent.getStringExtra(Actions.EXTRA_CODE);
+            CodeStore.saveReceiveDiagnostic(context, source == null ? "notification" : source, packageName == null ? "" : packageName, preview == null ? "" : preview, code == null ? "" : code);
+            sendStatusUpdate(context);
+            return;
+        }
         if (!Actions.ACTION_CODE_CAPTURED.equals(intent.getAction())) {
             return;
         }

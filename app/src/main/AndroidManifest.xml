@@ -51,6 +51,7 @@
             <intent-filter>
                 <action android:name="com.example.sms.ACTION_CODE_CAPTURED" />
                 <action android:name="com.example.sms.ACTION_CODE_FILLED" />
+                <action android:name="com.example.sms.ACTION_RECEIVE_DIAGNOSTIC" />
             </intent-filter>
         </receiver>
     </application>

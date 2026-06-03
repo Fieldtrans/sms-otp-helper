@@ -251,11 +251,12 @@ public class VerifyHook implements IXposedHookLoadPackage {
     }
 
     private void maybeCopyOtpFromNotification(Context context, Notification notification) {
+        String text = collectNotificationText(notification.extras);
+        String code = extractOtp(text);
+        notifyReceiveDiagnostic(context, code, text);
         if (!isClipboardBridgeEnabled()) {
             return;
         }
-        String text = collectNotificationText(notification.extras);
-        String code = extractOtp(text);
         if (TextUtils.isEmpty(code) || isDuplicateCode(code)) {
             return;
         }
@@ -272,6 +273,20 @@ public class VerifyHook implements IXposedHookLoadPackage {
             XposedBridge.log("SMS LSP copied otp to managed clipboard: " + code);
         } catch (Throwable t) {
             XposedBridge.log("SMS LSP copy clipboard failed: " + t);
+        }
+    }
+
+    private void notifyReceiveDiagnostic(Context context, String code, String preview) {
+        try {
+            Intent intent = new Intent(Actions.ACTION_RECEIVE_DIAGNOSTIC);
+            intent.setClassName(SELF_PACKAGE, "com.example.sms.CodeCapturedReceiver");
+            intent.putExtra(Actions.EXTRA_CODE, code == null ? "" : code);
+            intent.putExtra(Actions.EXTRA_SOURCE, "notification-hook");
+            intent.putExtra(Actions.EXTRA_PREVIEW, preview == null ? "" : preview);
+            intent.putExtra(Actions.EXTRA_PACKAGE, context.getPackageName());
+            context.sendBroadcast(intent);
+        } catch (Throwable t) {
+            XposedBridge.log("SMS LSP notify receive diagnostic failed: " + t);
         }
     }
 

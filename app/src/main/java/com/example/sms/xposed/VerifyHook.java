@@ -282,6 +282,7 @@ public class VerifyHook implements IXposedHookLoadPackage {
             intent.putExtra(Actions.EXTRA_CODE, code);
             intent.putExtra(Actions.EXTRA_SOURCE, "notification");
             intent.putExtra(Actions.EXTRA_PREVIEW, preview == null ? "" : preview);
+            intent.putExtra(Actions.EXTRA_PACKAGE, context.getPackageName());
             context.sendBroadcast(intent);
         } catch (Throwable t) {
             XposedBridge.log("SMS LSP notify module app failed: " + t);

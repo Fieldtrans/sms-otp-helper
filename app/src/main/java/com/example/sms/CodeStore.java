@@ -26,6 +26,11 @@ public final class CodeStore {
     private static final String KEY_CLIPBOARD_BRIDGE_ENABLED = "clipboard_bridge_enabled";
     private static final String KEY_PENDING_CODE = "pending_code";
     private static final String KEY_PENDING_CODE_SAVED_AT_MS = "pending_code_saved_at_ms";
+    private static final String KEY_DIAG_ENTRY = "diag_entry";
+    private static final String KEY_DIAG_PACKAGE = "diag_package";
+    private static final String KEY_DIAG_PREVIEW = "diag_preview";
+    private static final String KEY_DIAG_CODE = "diag_code";
+    private static final String KEY_DIAG_AT_MS = "diag_at_ms";
 
     private static final String DEFAULT_REGEX = "(?<!\\d)(\\d{4,8})(?!\\d)";
     private static final long CODE_TTL_MS = 10 * 60_000L; // 10分钟，方便调试
@@ -60,6 +65,7 @@ public final class CodeStore {
                 .putLong(KEY_PENDING_CODE_SAVED_AT_MS, now);
         editor.apply();
         appendHistory(context, code, source == null ? "" : source, now);
+        saveReceiveDiagnostic(context, source == null ? "notification" : source, "", preview, code);
         ensurePrefsReadable(context);
     }
 
@@ -85,7 +91,30 @@ public final class CodeStore {
         if (!TextUtils.isEmpty(extractedCode)) {
             appendHistory(context, extractedCode, "sms", now);
         }
+        saveReceiveDiagnostic(context, "sms", "system", messageBody, extractedCode);
         ensurePrefsReadable(context);
+    }
+
+    public static void saveReceiveDiagnostic(Context context, String entry, String packageName, String preview, String code) {
+        prefs(context).edit()
+                .putString(KEY_DIAG_ENTRY, entry == null ? "" : entry)
+                .putString(KEY_DIAG_PACKAGE, packageName == null ? "" : packageName)
+                .putString(KEY_DIAG_PREVIEW, buildPreview(preview))
+                .putString(KEY_DIAG_CODE, code == null ? "" : code)
+                .putLong(KEY_DIAG_AT_MS, System.currentTimeMillis())
+                .apply();
+        ensurePrefsReadable(context);
+    }
+
+    public static ReceiveDiagnostic getReceiveDiagnostic(Context context) {
+        SharedPreferences preferences = prefs(context);
+        return new ReceiveDiagnostic(
+                preferences.getString(KEY_DIAG_ENTRY, ""),
+                preferences.getString(KEY_DIAG_PACKAGE, ""),
+                preferences.getString(KEY_DIAG_PREVIEW, ""),
+                preferences.getString(KEY_DIAG_CODE, ""),
+                preferences.getLong(KEY_DIAG_AT_MS, 0L)
+        );
     }
 
     public static PendingCode getPendingCode(Context context) {
@@ -319,6 +348,42 @@ public final class CodeStore {
 
         public long getSavedAtMs() {
             return savedAtMs;
+        }
+    }
+
+    public static final class ReceiveDiagnostic {
+        private final String entry;
+        private final String packageName;
+        private final String preview;
+        private final String code;
+        private final long receivedAtMs;
+
+        private ReceiveDiagnostic(String entry, String packageName, String preview, String code, long receivedAtMs) {
+            this.entry = entry;
+            this.packageName = packageName;
+            this.preview = preview;
+            this.code = code;
+            this.receivedAtMs = receivedAtMs;
+        }
+
+        public String getEntry() {
+            return entry;
+        }
+
+        public String getPackageName() {
+            return packageName;
+        }
+
+        public String getPreview() {
+            return preview;
+        }
+
+        public String getCode() {
+            return code;
+        }
+
+        public long getReceivedAtMs() {
+            return receivedAtMs;
         }
     }
 }

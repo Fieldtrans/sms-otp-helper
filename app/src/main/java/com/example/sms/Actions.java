@@ -7,6 +7,7 @@ public final class Actions {
     public static final String EXTRA_CODE = "code";
     public static final String EXTRA_SOURCE = "source";
     public static final String EXTRA_PREVIEW = "preview";
+    public static final String EXTRA_PACKAGE = "package";
 
     private Actions() {
     }

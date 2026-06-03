@@ -110,6 +110,7 @@ private fun LspModuleScreen(
     var lastCodeAt by remember { mutableLongStateOf(CodeStore.getLastCodeSavedAtMs(context)) }
     var smsPermissionGranted by remember { mutableStateOf(hasSmsPermission(context)) }
     var clipboardOtpState by remember { mutableStateOf(readPendingOtpState(context)) }
+    var receiveDiagnostic by remember { mutableStateOf(CodeStore.getReceiveDiagnostic(context)) }
     var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var codeHistory by remember { mutableStateOf(CodeStore.getCodeHistory(context)) }
     var showHistory by remember { mutableStateOf(false) }
@@ -135,6 +136,7 @@ private fun LspModuleScreen(
         lastCodeAt = CodeStore.getLastCodeSavedAtMs(context)
         smsPermissionGranted = hasSmsPermission(context)
         clipboardOtpState = readPendingOtpState(context)
+        receiveDiagnostic = CodeStore.getReceiveDiagnostic(context)
         clipboardBridgeEnabled = CodeStore.isClipboardBridgeEnabled(context)
         codeHistory = CodeStore.getCodeHistory(context)
     }
@@ -211,6 +213,7 @@ private fun LspModuleScreen(
         val body = "【测试短信】验证码 $code，用于测试状态刷新。"
         val now = System.currentTimeMillis()
         CodeStore.saveSmsReceipt(context, body, code)
+        CodeStore.saveReceiveDiagnostic(context, "manual-test", context.packageName, body, code)
         try {
             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
             clipboard?.setPrimaryClip(ClipData.newPlainText("$MANAGED_CLIP_LABEL_PREFIX$now", code))
@@ -301,6 +304,7 @@ private fun LspModuleScreen(
                 )
                 MetricBlock("验证码来源", lastSource.ifBlank { "无" })
                 MetricBlock("内容预览", lastSmsBody.ifBlank { "还没有收到验证码内容" })
+                ReceiveDiagnosticBlock(receiveDiagnostic)
             }
 
             if (showHistory) {
@@ -327,6 +331,44 @@ private fun LspModuleScreen(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun ReceiveDiagnosticBlock(diagnostic: CodeStore.ReceiveDiagnostic) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color(0xFFF8FAFC), RoundedCornerShape(18.dp))
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(
+            text = "接收诊断",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = if (diagnostic.receivedAtMs <= 0L) "还没有接收记录" else "${diagnostic.entry.ifBlank { "未知入口" }} · ${formatTime(diagnostic.receivedAtMs)}",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            fontWeight = FontWeight.Bold,
+        )
+        Text(
+            text = "包名：${diagnostic.packageName.ifBlank { "无" }}",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = "匹配：${diagnostic.code.ifBlank { "未匹配" }}",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = diagnostic.preview.ifBlank { "无内容预览" },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

@@ -819,5 +819,6 @@ private fun parseManagedClipCreatedAt(label: String?): Long {
     if (label.isNullOrBlank() || !label.startsWith(MANAGED_CLIP_LABEL_PREFIX)) {
         return 0L
     }
-    return label.substring(MANAGED_CLIP_LABEL_PREFIX.length).toLongOrNull() ?: 0L
+    val payload = label.substring(MANAGED_CLIP_LABEL_PREFIX.length)
+    return payload.substringAfterLast(':').toLongOrNull() ?: 0L
 }

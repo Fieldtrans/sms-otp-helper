@@ -39,6 +39,7 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage;
 public class VerifyHook implements IXposedHookLoadPackage {
     private static final String SELF_PACKAGE = "com.example.sms";
     private static final String CLIP_LABEL_PREFIX = "CodeDelayLSP:";
+    private static final String CLIP_FILLED_MARK = "filled:";
     private static final Pattern OTP_PATTERN = Pattern.compile("(?<!\\d)(\\d{4,8})(?!\\d)");
     private static final long DEFAULT_DELAY_MS = 1200L;
     private static final long CLIPBOARD_CHANGE_DELAY_MS = 250L;
@@ -322,7 +323,7 @@ public class VerifyHook implements IXposedHookLoadPackage {
                 return;
             }
             if (inputConnection.commitText(clipboardCode, 1)) {
-                clearManagedClipboard(context);
+                markManagedClipboardFilled(context, clipboardCode);
                 notifyCodeFilled(context, clipboardCode);
             }
         }, Math.max(0L, delayMs));
@@ -346,6 +347,9 @@ public class VerifyHook implements IXposedHookLoadPackage {
                 return "";
             }
             ClipMeta meta = parseClipMeta(clipboard.getPrimaryClipDescription());
+            if (meta.isFilled) {
+                return "";
+            }
             if (meta.isManaged
                     && meta.createdAtMs > 0L
                     && System.currentTimeMillis() - meta.createdAtMs > CLIP_TTL_MS) {
@@ -374,6 +378,23 @@ public class VerifyHook implements IXposedHookLoadPackage {
                 return;
             }
             clipboard.setPrimaryClip(ClipData.newPlainText("", ""));
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private void markManagedClipboardFilled(Context context, String code) {
+        try {
+            ClipboardManager clipboard = (ClipboardManager) context.getSystemService(Context.CLIPBOARD_SERVICE);
+            if (clipboard == null || !clipboard.hasPrimaryClip()) {
+                return;
+            }
+            ClipMeta meta = parseClipMeta(clipboard.getPrimaryClipDescription());
+            if (!meta.isManaged) {
+                return;
+            }
+            long now = System.currentTimeMillis();
+            clipboard.setPrimaryClip(ClipData.newPlainText(buildFilledClipLabel(now), code == null ? "" : code));
+            new Handler(Looper.getMainLooper()).postDelayed(() -> clearManagedClipboard(context), CLIP_TTL_MS);
         } catch (Throwable ignored) {
         }
     }
@@ -476,6 +497,10 @@ public class VerifyHook implements IXposedHookLoadPackage {
         return CLIP_LABEL_PREFIX + createdAtMs;
     }
 
+    private String buildFilledClipLabel(long createdAtMs) {
+        return CLIP_LABEL_PREFIX + CLIP_FILLED_MARK + createdAtMs;
+    }
+
     private ClipMeta parseClipMeta(ClipDescription description) {
         if (description == null || description.getLabel() == null) {
             return ClipMeta.EMPTY;
@@ -485,6 +510,7 @@ public class VerifyHook implements IXposedHookLoadPackage {
             return ClipMeta.EMPTY;
         }
         String payload = label.substring(CLIP_LABEL_PREFIX.length());
+        boolean isFilled = payload.startsWith(CLIP_FILLED_MARK);
         int separator = payload.lastIndexOf(':');
         String createdAtText = separator < 0 ? payload : payload.substring(separator + 1);
         long createdAtMs = 0L;
@@ -492,17 +518,19 @@ public class VerifyHook implements IXposedHookLoadPackage {
             createdAtMs = Long.parseLong(createdAtText.trim());
         } catch (Throwable ignored) {
         }
-        return new ClipMeta(true, createdAtMs);
+        return new ClipMeta(true, isFilled, createdAtMs);
     }
 
     private static final class ClipMeta {
-        private static final ClipMeta EMPTY = new ClipMeta(false, 0L);
+        private static final ClipMeta EMPTY = new ClipMeta(false, false, 0L);
 
         private final boolean isManaged;
+        private final boolean isFilled;
         private final long createdAtMs;
 
-        private ClipMeta(boolean isManaged, long createdAtMs) {
+        private ClipMeta(boolean isManaged, boolean isFilled, long createdAtMs) {
             this.isManaged = isManaged;
+            this.isFilled = isFilled;
             this.createdAtMs = createdAtMs;
         }
     }

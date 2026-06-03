@@ -7,12 +7,15 @@ import android.content.ClipDescription;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.ResolveInfo;
 import android.inputmethodservice.InputMethodService;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
+import android.text.InputType;
 import android.text.TextUtils;
+import android.view.inputmethod.InputMethod;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputConnection;
 
@@ -26,8 +29,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.WeakHashMap;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.util.List;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.XC_MethodHook;
@@ -40,11 +42,6 @@ public class VerifyHook implements IXposedHookLoadPackage {
     private static final String SELF_PACKAGE = "com.example.sms";
     private static final String CLIP_LABEL_PREFIX = "CodeDelayLSP:";
     private static final String CLIP_FILLED_MARK = "filled:";
-    private static final Pattern OTP_PATTERN = Pattern.compile(
-            "(?:验证码|校验码|动态码|短信码|确认码|安全码|verification\\s*code|verify\\s*code|otp|code)\\D{0,20}(\\d{4,8})"
-                    + "|(\\d{4,8})\\D{0,20}(?:验证码|校验码|动态码|短信码|确认码|安全码)",
-            Pattern.CASE_INSENSITIVE
-    );
     private static final long DEFAULT_DELAY_MS = 1200L;
     private static final long CLIPBOARD_CHANGE_DELAY_MS = 250L;
     private static final long DUPLICATE_WINDOW_MS = 12_000L;
@@ -60,6 +57,8 @@ public class VerifyHook implements IXposedHookLoadPackage {
     private static WeakReference<Context> processContext = new WeakReference<>(null);
     private static final Map<InputMethodService, ClipboardManager.OnPrimaryClipChangedListener> imeClipboardListeners =
             new WeakHashMap<>();
+    private static final Map<InputMethodService, EditorInfo> imeEditorInfos = new WeakHashMap<>();
+    private static final Set<String> hookedImePackages = new HashSet<>();
     private static String lastCopiedCode = "";
     private static long lastCopiedAt = 0L;
 
@@ -70,18 +69,17 @@ public class VerifyHook implements IXposedHookLoadPackage {
             return;
         }
 
-        hookApplicationAttach();
-
         if (isSmsPackage(lpparam.packageName)) {
+            hookApplicationAttach(lpparam.packageName, false);
             hookNotificationDispatch(lpparam);
             XposedBridge.log("SMS LSP sms scope active: " + lpparam.packageName);
             return;
         }
 
-        hookInputMethodService(lpparam.packageName);
+        hookApplicationAttach(lpparam.packageName, true);
     }
 
-    private void hookApplicationAttach() {
+    private void hookApplicationAttach(String packageName, boolean hookImeAfterAttach) {
         XposedHelpers.findAndHookMethod(
                 Application.class,
                 "attach",
@@ -92,6 +90,9 @@ public class VerifyHook implements IXposedHookLoadPackage {
                         Context context = (Context) param.args[0];
                         processContext = new WeakReference<>(context.getApplicationContext());
                         reloadPrefs();
+                        if (hookImeAfterAttach && isInputMethodPackage(context, packageName)) {
+                            hookInputMethodService(packageName);
+                        }
                     }
                 }
         );
@@ -115,6 +116,11 @@ public class VerifyHook implements IXposedHookLoadPackage {
     }
 
     private void hookInputMethodService(String packageName) {
+        synchronized (hookedImePackages) {
+            if (!hookedImePackages.add(packageName)) {
+                return;
+            }
+        }
         try {
             XposedHelpers.findAndHookMethod(
                     InputMethodService.class,
@@ -132,7 +138,11 @@ public class VerifyHook implements IXposedHookLoadPackage {
                     new XC_MethodHook() {
                         @Override
                         protected void beforeHookedMethod(MethodHookParam param) {
-                            unregisterImeClipboardListener((InputMethodService) param.thisObject);
+                            InputMethodService service = (InputMethodService) param.thisObject;
+                            unregisterImeClipboardListener(service);
+                            synchronized (imeEditorInfos) {
+                                imeEditorInfos.remove(service);
+                            }
                         }
                     }
             );
@@ -144,7 +154,9 @@ public class VerifyHook implements IXposedHookLoadPackage {
                     new XC_MethodHook() {
                         @Override
                         protected void afterHookedMethod(MethodHookParam param) {
-                            commitOtpFromClipboard((InputMethodService) param.thisObject, DEFAULT_DELAY_MS);
+                            InputMethodService service = (InputMethodService) param.thisObject;
+                            rememberImeEditorInfo(service, (EditorInfo) param.args[0]);
+                            commitOtpFromClipboard(service, DEFAULT_DELAY_MS);
                         }
                     }
             );
@@ -156,7 +168,9 @@ public class VerifyHook implements IXposedHookLoadPackage {
                     new XC_MethodHook() {
                         @Override
                         protected void afterHookedMethod(MethodHookParam param) {
-                            commitOtpFromClipboard((InputMethodService) param.thisObject, DEFAULT_DELAY_MS);
+                            InputMethodService service = (InputMethodService) param.thisObject;
+                            rememberImeEditorInfo(service, (EditorInfo) param.args[0]);
+                            commitOtpFromClipboard(service, DEFAULT_DELAY_MS);
                         }
                     }
             );
@@ -174,6 +188,80 @@ public class VerifyHook implements IXposedHookLoadPackage {
         } catch (Throwable t) {
             XposedBridge.log("SMS LSP hook ime failed in " + packageName + ": " + t);
         }
+    }
+
+    private boolean isInputMethodPackage(Context context, String packageName) {
+        if (context == null || TextUtils.isEmpty(packageName)) {
+            return false;
+        }
+        try {
+            Intent intent = new Intent(InputMethod.SERVICE_INTERFACE);
+            intent.setPackage(packageName);
+            List<ResolveInfo> services = context.getPackageManager().queryIntentServices(intent, 0);
+            if (services == null || services.isEmpty()) {
+                return false;
+            }
+            for (ResolveInfo service : services) {
+                if (service != null
+                        && service.serviceInfo != null
+                        && "android.permission.BIND_INPUT_METHOD".equals(service.serviceInfo.permission)) {
+                    XposedBridge.log("SMS LSP ime package detected: " + packageName);
+                    return true;
+                }
+            }
+        } catch (Throwable t) {
+            XposedBridge.log("SMS LSP detect ime package failed in " + packageName + ": " + t);
+        }
+        return false;
+    }
+
+    private void rememberImeEditorInfo(InputMethodService service, EditorInfo editorInfo) {
+        if (service == null || editorInfo == null) {
+            return;
+        }
+        synchronized (imeEditorInfos) {
+            imeEditorInfos.put(service, editorInfo);
+        }
+    }
+
+    private boolean looksLikeOtpField(InputMethodService service) {
+        EditorInfo editorInfo;
+        synchronized (imeEditorInfos) {
+            editorInfo = imeEditorInfos.get(service);
+        }
+        if (editorInfo == null) {
+            return false;
+        }
+        int inputType = editorInfo.inputType;
+        int inputClass = inputType & InputType.TYPE_MASK_CLASS;
+        int variation = inputType & InputType.TYPE_MASK_VARIATION;
+        boolean numeric = inputClass == InputType.TYPE_CLASS_NUMBER;
+        boolean password = variation == InputType.TYPE_TEXT_VARIATION_PASSWORD
+                || variation == InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
+                || variation == InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD
+                || variation == InputType.TYPE_NUMBER_VARIATION_PASSWORD;
+        return numeric
+                || password
+                || containsOtpKeyword(editorInfo.hintText)
+                || containsOtpKeyword(editorInfo.fieldName)
+                || containsOtpKeyword(editorInfo.privateImeOptions);
+    }
+
+    private boolean containsOtpKeyword(CharSequence value) {
+        if (TextUtils.isEmpty(value)) {
+            return false;
+        }
+        String text = value.toString().toLowerCase();
+        return text.contains("验证码")
+                || text.contains("校验码")
+                || text.contains("动态码")
+                || text.contains("短信码")
+                || text.contains("确认码")
+                || text.contains("安全码")
+                || text.contains("otp")
+                || text.contains("code")
+                || text.contains("verify")
+                || text.contains("verification");
     }
 
     private void registerImeClipboardListener(InputMethodService service) {
@@ -320,6 +408,9 @@ public class VerifyHook implements IXposedHookLoadPackage {
             return;
         }
         new Handler(Looper.getMainLooper()).postDelayed(() -> {
+            if (!looksLikeOtpField(service)) {
+                return;
+            }
             InputConnection inputConnection = service.getCurrentInputConnection();
             if (inputConnection == null) {
                 return;
@@ -367,7 +458,7 @@ public class VerifyHook implements IXposedHookLoadPackage {
                 return "";
             }
             CharSequence text = data.getItemAt(0).coerceToText(context);
-            return meta.isManaged ? extractOtp(text) : "";
+            return meta.isManaged ? CodeStore.extractToken(text) : "";
         } catch (Throwable ignored) {
             return "";
         }
@@ -457,20 +548,7 @@ public class VerifyHook implements IXposedHookLoadPackage {
     }
 
     private String extractOtp(CharSequence text) {
-        if (TextUtils.isEmpty(text)) {
-            return "";
-        }
-        Matcher matcher = OTP_PATTERN.matcher(text);
-        if (!matcher.find()) {
-            return "";
-        }
-        for (int i = 1; i <= matcher.groupCount(); i++) {
-            String group = matcher.group(i);
-            if (!TextUtils.isEmpty(group)) {
-                return group;
-            }
-        }
-        return matcher.group();
+        return CodeStore.extractCode(text, null);
     }
 
     private boolean isDuplicateCode(String code) {
@@ -521,7 +599,7 @@ public class VerifyHook implements IXposedHookLoadPackage {
     private void reloadPrefs() {
         try {
             if (modulePrefs == null) {
-                modulePrefs = new XSharedPreferences(SELF_PACKAGE, CodeStore.PREFS);
+                modulePrefs = new XSharedPreferences(SELF_PACKAGE, CodeStore.PUBLIC_PREFS);
                 modulePrefs.makeWorldReadable();
             } else {
                 modulePrefs.reload();

@@ -15,6 +15,7 @@ import org.json.JSONObject;
 
 public final class CodeStore {
     public static final String PREFS = "verify_config";
+    public static final String PUBLIC_PREFS = "verify_public_config";
 
     private static final String KEY_LAST_CODE = "last_code";
     private static final String KEY_LAST_SOURCE = "last_source";
@@ -33,10 +34,15 @@ public final class CodeStore {
     private static final String KEY_DIAG_AT_MS = "diag_at_ms";
 
     private static final String LEGACY_DEFAULT_REGEX = "(?<!\\d)(\\d{4,8})(?!\\d)";
+    private static final String OTP_TOKEN = "((?=[A-Za-z0-9]{0,7}\\d)[A-Za-z0-9]{4,8})";
+    private static final String OTP_TOKEN_WITH_BOUNDARY = "(?<![A-Za-z0-9])" + OTP_TOKEN + "(?![A-Za-z0-9])";
+    private static final String OTP_CONTEXT = ".{0,30}?";
+    private static final String OTP_KEYWORDS = "验证码|校验码|动态码|短信码|确认码|安全码|verification\\s*code|verify\\s*code|otp|code";
     private static final String DEFAULT_REGEX =
-            "(?:验证码|校验码|动态码|短信码|确认码|安全码|verification\\s*code|verify\\s*code|otp|code)\\D{0,20}(\\d{4,8})"
-                    + "|(\\d{4,8})\\D{0,20}(?:验证码|校验码|动态码|短信码|确认码|安全码)";
+            "(?:" + OTP_KEYWORDS + ")" + OTP_CONTEXT + OTP_TOKEN_WITH_BOUNDARY
+                    + "|" + OTP_TOKEN_WITH_BOUNDARY + OTP_CONTEXT + "(?:" + OTP_KEYWORDS + ")";
     private static final Pattern DEFAULT_CODE_PATTERN = Pattern.compile(DEFAULT_REGEX, Pattern.CASE_INSENSITIVE);
+    private static final Pattern TOKEN_CODE_PATTERN = Pattern.compile(OTP_TOKEN_WITH_BOUNDARY, Pattern.CASE_INSENSITIVE);
     private static final long CODE_TTL_MS = 10 * 60_000L; // 10分钟，方便调试
     private static final long HISTORY_TTL_MS = 10 * 60_000L;
     private static final int HISTORY_LIMIT = 20;
@@ -46,6 +52,10 @@ public final class CodeStore {
 
     public static SharedPreferences prefs(Context context) {
         return context.getApplicationContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+    }
+
+    public static SharedPreferences publicPrefs(Context context) {
+        return context.getApplicationContext().getSharedPreferences(PUBLIC_PREFS, Context.MODE_PRIVATE);
     }
 
     public static void saveCode(Context context, String code, String source) {
@@ -211,6 +221,7 @@ public final class CodeStore {
 
     public static void setClipboardBridgeEnabled(Context context, boolean enabled) {
         prefs(context).edit().putBoolean(KEY_CLIPBOARD_BRIDGE_ENABLED, enabled).apply();
+        publicPrefs(context).edit().putBoolean(KEY_CLIPBOARD_BRIDGE_ENABLED, enabled).apply();
         ensurePrefsReadable(context);
     }
 
@@ -234,6 +245,17 @@ public final class CodeStore {
             return extractDefaultCode(text);
         }
         return "";
+    }
+
+    public static String extractToken(CharSequence text) {
+        if (text == null || text.length() == 0) {
+            return "";
+        }
+        Matcher matcher = TOKEN_CODE_PATTERN.matcher(text);
+        if (!matcher.find()) {
+            return "";
+        }
+        return firstMatchedGroup(matcher);
     }
 
     private static boolean isDefaultRegex(String regex) {
@@ -261,12 +283,22 @@ public final class CodeStore {
     }
 
     public static void ensurePrefsReadable(Context context) {
+        syncPublicConfig(context);
         try {
             File prefsDir = new File(context.getApplicationInfo().dataDir, "shared_prefs");
-            File prefsFile = new File(prefsDir, PREFS + ".xml");
+            File prefsFile = new File(prefsDir, PUBLIC_PREFS + ".xml");
             prefsDir.setReadable(true, false);
             prefsDir.setExecutable(true, false);
             prefsFile.setReadable(true, false);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private static void syncPublicConfig(Context context) {
+        try {
+            publicPrefs(context).edit()
+                    .putBoolean(KEY_CLIPBOARD_BRIDGE_ENABLED, prefs(context).getBoolean(KEY_CLIPBOARD_BRIDGE_ENABLED, true))
+                    .apply();
         } catch (Throwable ignored) {
         }
     }

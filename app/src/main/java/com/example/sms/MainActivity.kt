@@ -71,7 +71,6 @@ import com.example.sms.ui.theme.SMSTheme
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import java.util.regex.Pattern
 import kotlinx.coroutines.delay
 import kotlin.math.ceil
 import kotlin.random.Random
@@ -805,8 +804,7 @@ private fun readClipboardOtpState(context: Context): ClipboardOtpState {
         if (data.itemCount == 0) return ClipboardOtpState()
         val text = data.getItemAt(0).coerceToText(context)?.toString().orEmpty()
         if (text.isBlank()) return ClipboardOtpState()
-        val matcher = Pattern.compile("(?<!\\d)(\\d{4,8})(?!\\d)").matcher(text)
-        val code = if (matcher.find()) matcher.group(1) ?: text else text
+        val code = CodeStore.extractToken(text).ifBlank { text }
         ClipboardOtpState(code = code, createdAtMs = createdAtMs)
     } catch (_: Throwable) {
         ClipboardOtpState()

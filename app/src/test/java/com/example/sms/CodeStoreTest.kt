@@ -34,6 +34,31 @@ class CodeStoreTest {
     }
 
     @Test
+    fun extractCode_matchesAlphaNumericCode() {
+        val code = CodeStore.extractCode("Your verification code is AB12CD.", "(?<!\\d)(\\d{4,8})(?!\\d)")
+
+        assertEquals("AB12CD", code)
+    }
+
+    @Test
+    fun extractCode_ignoresAlphaWordsWithoutDigits() {
+        val code = CodeStore.extractCode("Your verification code is ABCDEF.", "(?<!\\d)(\\d{4,8})(?!\\d)")
+
+        assertEquals("", code)
+    }
+
+    @Test
+    fun extractToken_matchesManagedClipboardCode() {
+        assertEquals("123456", CodeStore.extractToken("123456"))
+        assertEquals("AB12CD", CodeStore.extractToken("AB12CD"))
+    }
+
+    @Test
+    fun extractToken_ignoresPlainAlphaWord() {
+        assertEquals("", CodeStore.extractToken("ABCDEF"))
+    }
+
+    @Test
     fun extractCode_usesFirstCaptureGroup() {
         val code = CodeStore.extractCode("code: AB-7890", "code:\\s*([A-Z]{2}-\\d{4})")
 

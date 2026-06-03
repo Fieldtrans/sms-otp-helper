@@ -24,6 +24,8 @@ public final class CodeStore {
     private static final String KEY_LAST_SMS_RECEIVED_AT_MS = "last_sms_received_at_ms";
     private static final String KEY_CODE_HISTORY = "code_history";
     private static final String KEY_CLIPBOARD_BRIDGE_ENABLED = "clipboard_bridge_enabled";
+    private static final String KEY_PENDING_CODE = "pending_code";
+    private static final String KEY_PENDING_CODE_SAVED_AT_MS = "pending_code_saved_at_ms";
 
     private static final String DEFAULT_REGEX = "(?<!\\d)(\\d{4,8})(?!\\d)";
     private static final long CODE_TTL_MS = 10 * 60_000L; // 10分钟，方便调试
@@ -54,28 +56,54 @@ public final class CodeStore {
         if (!TextUtils.isEmpty(preview)) {
             editor.putString(KEY_LAST_SMS_BODY, buildPreview(preview));
         }
+        editor.putString(KEY_PENDING_CODE, code)
+                .putLong(KEY_PENDING_CODE_SAVED_AT_MS, now);
         editor.apply();
         appendHistory(context, code, source == null ? "" : source, now);
         ensurePrefsReadable(context);
     }
 
     public static void saveSmsReceipt(Context context, String messageBody, String extractedCode) {
+        long now = System.currentTimeMillis();
         SharedPreferences.Editor editor = prefs(context).edit()
                 .putString(KEY_LAST_SMS_BODY, buildPreview(messageBody))
-                .putLong(KEY_LAST_SMS_RECEIVED_AT_MS, System.currentTimeMillis());
+                .putLong(KEY_LAST_SMS_RECEIVED_AT_MS, now);
         if (!TextUtils.isEmpty(extractedCode)) {
             editor.putString(KEY_LAST_CODE, extractedCode)
                     .putString(KEY_LAST_SOURCE, "sms")
-                    .putLong(KEY_CODE_SAVED_AT_MS, System.currentTimeMillis());
+                    .putLong(KEY_CODE_SAVED_AT_MS, now)
+                    .putString(KEY_PENDING_CODE, extractedCode)
+                    .putLong(KEY_PENDING_CODE_SAVED_AT_MS, now);
         } else {
             editor.remove(KEY_LAST_CODE)
                     .remove(KEY_LAST_SOURCE)
-                    .remove(KEY_CODE_SAVED_AT_MS);
+                    .remove(KEY_CODE_SAVED_AT_MS)
+                    .remove(KEY_PENDING_CODE)
+                    .remove(KEY_PENDING_CODE_SAVED_AT_MS);
         }
         editor.apply();
         if (!TextUtils.isEmpty(extractedCode)) {
-            appendHistory(context, extractedCode, "sms", System.currentTimeMillis());
+            appendHistory(context, extractedCode, "sms", now);
         }
+        ensurePrefsReadable(context);
+    }
+
+    public static PendingCode getPendingCode(Context context) {
+        SharedPreferences preferences = prefs(context);
+        String code = preferences.getString(KEY_PENDING_CODE, "");
+        long savedAtMs = preferences.getLong(KEY_PENDING_CODE_SAVED_AT_MS, 0L);
+        if (TextUtils.isEmpty(code) || savedAtMs <= 0L || System.currentTimeMillis() - savedAtMs > 90_000L) {
+            clearPendingCode(context);
+            return PendingCode.EMPTY;
+        }
+        return new PendingCode(code, savedAtMs);
+    }
+
+    public static void clearPendingCode(Context context) {
+        prefs(context).edit()
+                .remove(KEY_PENDING_CODE)
+                .remove(KEY_PENDING_CODE_SAVED_AT_MS)
+                .apply();
         ensurePrefsReadable(context);
     }
 
@@ -267,6 +295,26 @@ public final class CodeStore {
 
         public String getSource() {
             return source;
+        }
+
+        public long getSavedAtMs() {
+            return savedAtMs;
+        }
+    }
+
+    public static final class PendingCode {
+        private static final PendingCode EMPTY = new PendingCode("", 0L);
+
+        private final String code;
+        private final long savedAtMs;
+
+        private PendingCode(String code, long savedAtMs) {
+            this.code = code;
+            this.savedAtMs = savedAtMs;
+        }
+
+        public String getCode() {
+            return code;
         }
 
         public long getSavedAtMs() {

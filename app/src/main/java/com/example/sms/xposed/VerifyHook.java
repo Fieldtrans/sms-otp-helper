@@ -307,8 +307,20 @@ public class VerifyHook implements IXposedHookLoadPackage {
             }
             if (inputConnection.commitText(clipboardCode, 1)) {
                 clearManagedClipboard(context);
+                notifyCodeFilled(context, clipboardCode);
             }
         }, Math.max(0L, delayMs));
+    }
+
+    private void notifyCodeFilled(Context context, String code) {
+        try {
+            Intent intent = new Intent(Actions.ACTION_CODE_FILLED);
+            intent.setClassName(SELF_PACKAGE, "com.example.sms.CodeCapturedReceiver");
+            intent.putExtra(Actions.EXTRA_CODE, code == null ? "" : code);
+            context.sendBroadcast(intent);
+        } catch (Throwable t) {
+            XposedBridge.log("SMS LSP notify code filled failed: " + t);
+        }
     }
 
     private String readOtpFromClipboard(Context context) {

@@ -109,7 +109,7 @@ private fun LspModuleScreen(
     var lastSmsBody by remember { mutableStateOf(CodeStore.getLastSmsBody(context)) }
     var lastCodeAt by remember { mutableLongStateOf(CodeStore.getLastCodeSavedAtMs(context)) }
     var smsPermissionGranted by remember { mutableStateOf(hasSmsPermission(context)) }
-    var clipboardOtpState by remember { mutableStateOf(readClipboardOtpState(context)) }
+    var clipboardOtpState by remember { mutableStateOf(readPendingOtpState(context)) }
     var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var codeHistory by remember { mutableStateOf(CodeStore.getCodeHistory(context)) }
     var showHistory by remember { mutableStateOf(false) }
@@ -134,9 +134,7 @@ private fun LspModuleScreen(
         lastSmsBody = CodeStore.getLastSmsBody(context)
         lastCodeAt = CodeStore.getLastCodeSavedAtMs(context)
         smsPermissionGranted = hasSmsPermission(context)
-        if (readClipboard) {
-            clipboardOtpState = readClipboardOtpState(context)
-        }
+        clipboardOtpState = readPendingOtpState(context)
         clipboardBridgeEnabled = CodeStore.isClipboardBridgeEnabled(context)
         codeHistory = CodeStore.getCodeHistory(context)
     }
@@ -167,19 +165,25 @@ private fun LspModuleScreen(
 
     DisposableEffect(context) {
         val receiver = object : BroadcastReceiver() {
-            override fun onReceive(context: Context?, intent: Intent?) {
+            override fun onReceive(receiverContext: Context?, intent: Intent?) {
                 if (intent?.action == Actions.ACTION_SMS_STATUS_UPDATED) {
                     refreshStatus(readClipboard = true)
+                } else if (intent?.action == Actions.ACTION_CODE_FILLED) {
+                    CodeStore.clearPendingCode(context)
+                    refreshStatus(readClipboard = false)
                 }
             }
         }
         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
         val clipListener = ClipboardManager.OnPrimaryClipChangedListener {
-            refreshStatus(readClipboard = true)
+            refreshStatus(readClipboard = false)
         }
         clipboard?.addPrimaryClipChangedListener(clipListener)
         refreshStatus(readClipboard = true)
-        val filter = IntentFilter(Actions.ACTION_SMS_STATUS_UPDATED)
+        val filter = IntentFilter().apply {
+            addAction(Actions.ACTION_SMS_STATUS_UPDATED)
+            addAction(Actions.ACTION_CODE_FILLED)
+        }
         if (Build.VERSION.SDK_INT >= 33) {
             context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
         } else {
@@ -696,6 +700,14 @@ private data class ClipboardOtpState(
     fun displayCode(nowMs: Long): String {
         return if (remainingMs(nowMs) > 0L) code else EMPTY_CODE_TEXT
     }
+}
+
+private fun readPendingOtpState(context: Context): ClipboardOtpState {
+    val pending = CodeStore.getPendingCode(context)
+    return ClipboardOtpState(
+        code = pending.code,
+        createdAtMs = pending.savedAtMs,
+    )
 }
 
 private fun readClipboardOtpState(context: Context): ClipboardOtpState {

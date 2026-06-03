@@ -8,7 +8,15 @@ import android.text.TextUtils;
 public class CodeCapturedReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(Context context, Intent intent) {
-        if (intent == null || !Actions.ACTION_CODE_CAPTURED.equals(intent.getAction())) {
+        if (intent == null) {
+            return;
+        }
+        if (Actions.ACTION_CODE_FILLED.equals(intent.getAction())) {
+            CodeStore.clearPendingCode(context);
+            sendStatusUpdate(context);
+            return;
+        }
+        if (!Actions.ACTION_CODE_CAPTURED.equals(intent.getAction())) {
             return;
         }
         String code = intent.getStringExtra(Actions.EXTRA_CODE);
@@ -19,6 +27,10 @@ public class CodeCapturedReceiver extends BroadcastReceiver {
         String preview = intent.getStringExtra(Actions.EXTRA_PREVIEW);
         CodeStore.saveCapturedCode(context, code, source == null ? "notification" : source, preview == null ? "" : preview);
 
+        sendStatusUpdate(context);
+    }
+
+    private void sendStatusUpdate(Context context) {
         Intent updateIntent = new Intent(Actions.ACTION_SMS_STATUS_UPDATED);
         updateIntent.setPackage(context.getPackageName());
         context.sendBroadcast(updateIntent);

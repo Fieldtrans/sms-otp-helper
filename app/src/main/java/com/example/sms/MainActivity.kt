@@ -74,6 +74,7 @@ import java.util.Locale
 import java.util.regex.Pattern
 import kotlinx.coroutines.delay
 import kotlin.math.ceil
+import kotlin.random.Random
 
 private const val MANAGED_CLIP_LABEL_PREFIX = "CodeDelayLSP:"
 private const val CLIP_TTL_MS = 90_000L
@@ -201,6 +202,23 @@ private fun LspModuleScreen(
         onToast("已保存")
     }
 
+    fun simulateSmsReceipt() {
+        val code = Random.nextInt(1000, 10_000).toString()
+        val body = "【测试短信】验证码 $code，用于测试状态刷新。"
+        val now = System.currentTimeMillis()
+        CodeStore.saveSmsReceipt(context, body, code)
+        try {
+            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+            clipboard?.setPrimaryClip(ClipData.newPlainText("$MANAGED_CLIP_LABEL_PREFIX$now", code))
+        } catch (_: Throwable) {
+        }
+        val updateIntent = Intent(Actions.ACTION_SMS_STATUS_UPDATED).setPackage(context.packageName)
+        context.sendBroadcast(updateIntent)
+        nowMs = now
+        refreshStatus(readClipboard = true)
+        onToast("已模拟收到验证码 $code")
+    }
+
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         containerColor = Color(0xFFF6F7F9),
@@ -268,6 +286,8 @@ private fun LspModuleScreen(
                 title = "当前验证码",
                 summary = "这里显示准备自动填入的验证码，填入后会清空，90 秒后自动失效。",
             ) {
+                SimulateSmsButton(onClick = ::simulateSmsReceipt)
+                Spacer(Modifier.height(12.dp))
                 ClipboardCodeBlock(clipboardOtpState, nowMs)
                 Spacer(Modifier.height(12.dp))
                 RecentCodeBlock(
@@ -303,6 +323,25 @@ private fun LspModuleScreen(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun SimulateSmsButton(onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color(0xFFDCFCE7), RoundedCornerShape(18.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 13.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = "模拟收到短信验证码",
+            style = MaterialTheme.typography.bodyLarge,
+            color = Color(0xFF166534),
+            fontWeight = FontWeight.Bold,
+        )
     }
 }
 

@@ -257,7 +257,7 @@ private fun LspModuleScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = "验证码助手",
+                    text = "短信验证码助手",
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold,
                 )

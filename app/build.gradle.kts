@@ -14,8 +14,8 @@ android {
         applicationId = "com.example.sms"
         minSdk = 29
         targetSdk = 36
-        versionCode = 2
-        versionName = "1.0-beta.1"
+        versionCode = 3
+        versionName = "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

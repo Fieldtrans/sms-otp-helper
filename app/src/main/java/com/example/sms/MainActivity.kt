@@ -109,6 +109,7 @@ private fun LspModuleScreen(
     var lastSource by remember { mutableStateOf(CodeStore.getLastSource(context)) }
     var lastSmsBody by remember { mutableStateOf(CodeStore.getLastSmsBody(context)) }
     var lastCodeAt by remember { mutableLongStateOf(CodeStore.getLastCodeSavedAtMs(context)) }
+    var lastSmsReceivedAt by remember { mutableLongStateOf(CodeStore.getLastSmsReceivedAtMs(context)) }
     var smsPermissionGranted by remember { mutableStateOf(hasSmsPermission(context)) }
     var notificationPermissionGranted by remember { mutableStateOf(hasNotificationPermission(context)) }
     var clipboardOtpState by remember { mutableStateOf(readPendingOtpState(context)) }
@@ -144,6 +145,7 @@ private fun LspModuleScreen(
         lastSource = CodeStore.getLastSource(context)
         lastSmsBody = CodeStore.getLastSmsBody(context)
         lastCodeAt = CodeStore.getLastCodeSavedAtMs(context)
+        lastSmsReceivedAt = CodeStore.getLastSmsReceivedAtMs(context)
         smsPermissionGranted = hasSmsPermission(context)
         notificationPermissionGranted = hasNotificationPermission(context)
         clipboardOtpState = resolveOtpState(
@@ -333,7 +335,11 @@ private fun LspModuleScreen(
                     onClick = { showHistory = true },
                 )
                 MetricBlock("验证码来源", lastSource.ifBlank { "无" })
-                MetricBlock("内容预览", lastSmsBody.ifBlank { "还没有收到验证码内容" })
+                MetricBlock(
+                    label = "内容预览",
+                    value = lastSmsBody.ifBlank { "还没有收到验证码内容" },
+                    timestamp = if (lastSmsBody.isBlank()) 0L else lastSmsReceivedAt,
+                )
                 ReceiveDiagnosticBlock(receiveDiagnostic)
             }
 
@@ -387,10 +393,15 @@ private fun ReceiveDiagnosticBlock(diagnostic: CodeStore.ReceiveDiagnostic) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Text(
-            text = if (diagnostic.receivedAtMs <= 0L) "还没有接收记录" else "${diagnostic.entry.ifBlank { "未知入口" }} · ${formatTime(diagnostic.receivedAtMs)}",
+            text = if (diagnostic.receivedAtMs <= 0L) "还没有接收记录" else diagnostic.entry.ifBlank { "未知入口" },
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurface,
             fontWeight = FontWeight.Bold,
+        )
+        Text(
+            text = "时间：${formatTime(diagnostic.receivedAtMs)}",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Text(
             text = "包名：${diagnostic.packageName.ifBlank { "无" }}",
@@ -620,7 +631,7 @@ private fun RecentCodeBlock(
 }
 
 @Composable
-private fun MetricBlock(label: String, value: String) {
+private fun MetricBlock(label: String, value: String, timestamp: Long = 0L) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -638,6 +649,13 @@ private fun MetricBlock(label: String, value: String) {
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurface,
         )
+        if (timestamp > 0L) {
+            Text(
+                text = "时间：${formatTime(timestamp)}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 

@@ -6,9 +6,10 @@
 
 ## 正式版说明
 
-- 当前版本：`1.2.0`
+- 当前 Android 版本：`1.2.0`
+- 当前 Windows 辅助程序版本：`1.2.1`
 - 下载 APK：[sms-otp-helper-v1.2.0.apk](releases/sms-otp-helper-v1.2.0.apk)
-- 下载 Windows 辅助程序：[SmsOtpHelper.Win-v1.2.0.exe](releases/SmsOtpHelper.Win-v1.2.0.exe)
+- 下载 Windows 辅助程序：[SmsOtpHelper.Win-v1.2.1.exe](releases/SmsOtpHelper.Win-v1.2.1.exe)
 - 需要 Android 10+。
 - 需要在 LSPosed 中勾选短信 App 和当前输入法 App。
 - 安装或升级后建议重启手机，或至少强行停止短信 App 与当前输入法进程。
@@ -30,6 +31,7 @@
 
 - 自动读取手机 `Download/SMS/latest_otp.txt`，有新验证码时复制到电脑剪贴板。
 - 默认快捷键 `Ctrl+Alt+V`：把电脑当前剪贴板写入手机 `Download/SMS` 目录。
+- USB 连接并授权 ADB 后，可自动尝试打开手机文件传输模式，也可在托盘菜单手动触发。
 - 双击托盘图标或右键“设置”可以修改 ADB 路径、手机目录、快捷键和轮询秒数。
 
 ## 发布包
@@ -40,9 +42,11 @@
 
 Windows 辅助程序：
 
-[`releases/SmsOtpHelper.Win-v1.2.0.exe`](releases/SmsOtpHelper.Win-v1.2.0.exe)
+[`releases/SmsOtpHelper.Win-v1.2.1.exe`](releases/SmsOtpHelper.Win-v1.2.1.exe)
 
 历史版本：
+
+[`releases/SmsOtpHelper.Win-v1.2.0.exe`](releases/SmsOtpHelper.Win-v1.2.0.exe)
 
 [`releases/sms-otp-helper-v1.1.2.apk`](releases/sms-otp-helper-v1.1.2.apk)
 
@@ -56,4 +60,4 @@ APK SHA256：
 
 Windows exe SHA256：
 
-`161A6E45AA9BE29A74D659257B3D005C0158891E3225ADD3AB47776569486A6E`
+`786F4B3BE841AAAF36299EABBAA520348B2B564E88E52D5C3C6C1302A66F272D`

@@ -26,8 +26,11 @@ namespace SmsOtpHelper.Win
         private const int WmHotkey = 0x0312;
         private readonly NotifyIcon notifyIcon;
         private readonly System.Windows.Forms.Timer pollTimer;
+        private readonly System.Windows.Forms.Timer deviceTimer;
         private readonly AppConfig config;
         private string lastOtpPayload = "";
+        private bool lastDeviceConnected = false;
+        private long lastMtpAttemptAtMs = 0L;
 
         public TrayApp()
         {
@@ -45,6 +48,9 @@ namespace SmsOtpHelper.Win
 
             pollTimer = new System.Windows.Forms.Timer();
             pollTimer.Tick += delegate { PullLatestOtp(false); };
+            deviceTimer = new System.Windows.Forms.Timer();
+            deviceTimer.Interval = 3000;
+            deviceTimer.Tick += delegate { CheckDeviceForMtp(); };
             ApplyConfig();
 
             BeginInvoke(new Action(delegate
@@ -52,6 +58,7 @@ namespace SmsOtpHelper.Win
                 Hide();
                 notifyIcon.ShowBalloonTip(1500, "短信验证码助手", "已在托盘运行", ToolTipIcon.Info);
                 PullLatestOtp(false);
+                CheckDeviceForMtp();
             }));
         }
 
@@ -76,6 +83,7 @@ namespace SmsOtpHelper.Win
             {
                 NativeMethods.UnregisterHotKey(Handle, HotkeyId);
                 pollTimer.Dispose();
+                deviceTimer.Dispose();
                 notifyIcon.Dispose();
             }
             base.Dispose(disposing);
@@ -86,6 +94,7 @@ namespace SmsOtpHelper.Win
             ContextMenuStrip menu = new ContextMenuStrip();
             menu.Items.Add("立即读取手机验证码", null, delegate { PullLatestOtp(true); });
             menu.Items.Add("电脑剪贴板写入手机", null, delegate { PushClipboardToPhone(); });
+            menu.Items.Add("打开手机文件传输模式", null, delegate { EnableMtp(true); });
             menu.Items.Add("检测手机连接", null, delegate { CheckDevice(true); });
             menu.Items.Add("设置", null, delegate { ShowSettings(); });
             menu.Items.Add(new ToolStripSeparator());
@@ -100,6 +109,12 @@ namespace SmsOtpHelper.Win
             {
                 pollTimer.Interval = Math.Max(2, config.PollSeconds) * 1000;
                 pollTimer.Start();
+            }
+
+            deviceTimer.Stop();
+            if (config.AutoEnableMtp)
+            {
+                deviceTimer.Start();
             }
 
             NativeMethods.UnregisterHotKey(Handle, HotkeyId);
@@ -191,6 +206,61 @@ namespace SmsOtpHelper.Win
                 if (showResult) Toast("检测失败：" + ex.Message);
                 return false;
             }
+        }
+
+        private void CheckDeviceForMtp()
+        {
+            ThreadPool.QueueUserWorkItem(delegate
+            {
+                bool connected = CheckDevice(false);
+                if (connected && !lastDeviceConnected)
+                {
+                    EnableMtp(false);
+                }
+                lastDeviceConnected = connected;
+            });
+        }
+
+        private void EnableMtp(bool showResult)
+        {
+            ThreadPool.QueueUserWorkItem(delegate
+            {
+                try
+                {
+                    long now = Environment.TickCount & int.MaxValue;
+                    if (!showResult && now - lastMtpAttemptAtMs < 10000L)
+                    {
+                        return;
+                    }
+                    lastMtpAttemptAtMs = now;
+
+                    if (!CheckDevice(false))
+                    {
+                        if (showResult) Toast("未检测到已授权手机。");
+                        return;
+                    }
+
+                    try
+                    {
+                        RunAdb("shell svc usb setFunctions mtp,adb");
+                    }
+                    catch
+                    {
+                        RunAdb("shell svc usb setFunctions mtp");
+                    }
+                    if (showResult || config.ShowMtpToast)
+                    {
+                        Toast("已尝试打开手机文件传输模式。");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    if (showResult || config.ShowMtpToast)
+                    {
+                        Toast("打开文件传输失败：" + ex.Message);
+                    }
+                }
+            });
         }
 
         private void ShowSettings()
@@ -297,6 +367,8 @@ namespace SmsOtpHelper.Win
         private readonly TextBox hotkeyBox = new TextBox();
         private readonly TextBox pollSecondsBox = new TextBox();
         private readonly CheckBox autoPullBox = new CheckBox();
+        private readonly CheckBox autoMtpBox = new CheckBox();
+        private readonly CheckBox showMtpToastBox = new CheckBox();
 
         public SettingsDialog(AppConfig config)
         {
@@ -306,7 +378,7 @@ namespace SmsOtpHelper.Win
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(430, 270);
+            ClientSize = new Size(430, 330);
 
             AddLabel("ADB 路径", 16, 20);
             adbPathBox.SetBounds(120, 16, 290, 24);
@@ -333,21 +405,31 @@ namespace SmsOtpHelper.Win
             pollSecondsBox.Text = config.PollSeconds.ToString();
             Controls.Add(pollSecondsBox);
 
+            autoMtpBox.SetBounds(120, 198, 260, 24);
+            autoMtpBox.Text = "USB 连接后自动打开文件传输";
+            autoMtpBox.Checked = config.AutoEnableMtp;
+            Controls.Add(autoMtpBox);
+
+            showMtpToastBox.SetBounds(120, 228, 260, 24);
+            showMtpToastBox.Text = "文件传输尝试后显示提示";
+            showMtpToastBox.Checked = config.ShowMtpToast;
+            Controls.Add(showMtpToastBox);
+
             Label hint = new Label();
-            hint.SetBounds(16, 202, 400, 32);
-            hint.Text = "手机端需在右上角设置里开启“导出给电脑”。";
+            hint.SetBounds(16, 262, 400, 32);
+            hint.Text = "需开启 USB 调试并授权；文件传输模式可能被部分系统拦截。";
             hint.ForeColor = Color.DimGray;
             Controls.Add(hint);
 
             Button ok = new Button();
             ok.Text = "保存";
-            ok.SetBounds(240, 232, 80, 28);
+            ok.SetBounds(240, 292, 80, 28);
             ok.Click += delegate { SaveAndClose(); };
             Controls.Add(ok);
 
             Button cancel = new Button();
             cancel.Text = "取消";
-            cancel.SetBounds(330, 232, 80, 28);
+            cancel.SetBounds(330, 292, 80, 28);
             cancel.Click += delegate { DialogResult = DialogResult.Cancel; Close(); };
             Controls.Add(cancel);
         }
@@ -371,6 +453,8 @@ namespace SmsOtpHelper.Win
             config.PhoneDir = phoneDirBox.Text.Trim();
             config.PushHotkey = hotkeyBox.Text.Trim();
             config.AutoPullOtp = autoPullBox.Checked;
+            config.AutoEnableMtp = autoMtpBox.Checked;
+            config.ShowMtpToast = showMtpToastBox.Checked;
             config.PollSeconds = Math.Max(2, Math.Min(60, pollSeconds));
             DialogResult = DialogResult.OK;
             Close();
@@ -384,6 +468,8 @@ namespace SmsOtpHelper.Win
         public string PhoneDir = "/sdcard/Download/SMS";
         public string PushHotkey = "Ctrl+Alt+V";
         public bool AutoPullOtp = true;
+        public bool AutoEnableMtp = true;
+        public bool ShowMtpToast = true;
         public int PollSeconds = 5;
 
         public static AppConfig Load()
@@ -400,6 +486,8 @@ namespace SmsOtpHelper.Win
                 else if (key == "PhoneDir") config.PhoneDir = value;
                 else if (key == "PushHotkey") config.PushHotkey = value;
                 else if (key == "AutoPullOtp") config.AutoPullOtp = value == "true";
+                else if (key == "AutoEnableMtp") config.AutoEnableMtp = value == "true";
+                else if (key == "ShowMtpToast") config.ShowMtpToast = value == "true";
                 else if (key == "PollSeconds")
                 {
                     int seconds;
@@ -416,6 +504,8 @@ namespace SmsOtpHelper.Win
             builder.AppendLine("PhoneDir=" + PhoneDir);
             builder.AppendLine("PushHotkey=" + PushHotkey);
             builder.AppendLine("AutoPullOtp=" + (AutoPullOtp ? "true" : "false"));
+            builder.AppendLine("AutoEnableMtp=" + (AutoEnableMtp ? "true" : "false"));
+            builder.AppendLine("ShowMtpToast=" + (ShowMtpToast ? "true" : "false"));
             builder.AppendLine("PollSeconds=" + PollSeconds);
             File.WriteAllText(ConfigPath, builder.ToString(), Encoding.UTF8);
         }

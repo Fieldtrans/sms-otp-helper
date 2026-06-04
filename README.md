@@ -6,13 +6,13 @@
 
 ## 正式版说明
 
-- 当前版本：`1.1.1`
-- 下载 APK：[sms-otp-helper-v1.1.1.apk](releases/sms-otp-helper-v1.1.1.apk)
+- 当前版本：`1.1.2`
+- 下载 APK：[sms-otp-helper-v1.1.2.apk](releases/sms-otp-helper-v1.1.2.apk)
 - 需要 Android 10+。
 - 需要在 LSPosed 中勾选短信 App 和当前输入法 App。
-- Android 13+ 需要授予通知权限，收到验证码时会显示“验证码已就绪”提示。
 - 安装或升级后建议重启手机，或至少强行停止短信 App 与当前输入法进程。
 - 设置里可以开启“半自动填入”，默认保留验证码最后 2 位不填。例如 `123456` 会自动输入 `1234`。
+- 设置里可以关闭收到验证码时的 Toast 提示，或调整提示秒数。
 
 ## 基本流程
 
@@ -26,9 +26,11 @@
 
 正式版 APK：
 
-[`releases/sms-otp-helper-v1.1.1.apk`](releases/sms-otp-helper-v1.1.1.apk)
+[`releases/sms-otp-helper-v1.1.2.apk`](releases/sms-otp-helper-v1.1.2.apk)
 
 历史版本：
+
+[`releases/sms-otp-helper-v1.1.1.apk`](releases/sms-otp-helper-v1.1.1.apk)
 
 [`releases/sms-otp-helper-v1.1.0.apk`](releases/sms-otp-helper-v1.1.0.apk)
 
@@ -36,4 +38,4 @@
 
 SHA256：
 
-`D70D0885CBAA31609832A7EA87822232086809923E9963EFA178DE2AA512D2B1`
+`05E391D3BEE16CA7609C3C0E3A9484E5254E4D1CF5DCDABBFBBC5237A482A906`

@@ -27,6 +27,8 @@ public final class CodeStore {
     public static final String KEY_CLIPBOARD_BRIDGE_ENABLED = "clipboard_bridge_enabled";
     public static final String KEY_SEMI_AUTO_ENABLED = "semi_auto_enabled";
     public static final String KEY_SEMI_AUTO_KEEP_TAIL_LENGTH = "semi_auto_keep_tail_length";
+    private static final String KEY_TOAST_PROMPT_ENABLED = "toast_prompt_enabled";
+    private static final String KEY_TOAST_PROMPT_DURATION_SECONDS = "toast_prompt_duration_seconds";
     private static final String KEY_PENDING_CODE = "pending_code";
     private static final String KEY_PENDING_CODE_SAVED_AT_MS = "pending_code_saved_at_ms";
     private static final String KEY_DIAG_ENTRY = "diag_entry";
@@ -50,6 +52,8 @@ public final class CodeStore {
     private static final int HISTORY_LIMIT = 20;
     private static final int DEFAULT_SEMI_AUTO_KEEP_TAIL_LENGTH = 2;
     private static final int MAX_SEMI_AUTO_KEEP_TAIL_LENGTH = 8;
+    private static final int DEFAULT_TOAST_PROMPT_DURATION_SECONDS = 2;
+    private static final int MAX_TOAST_PROMPT_DURATION_SECONDS = 10;
 
     private CodeStore() {
     }
@@ -266,6 +270,23 @@ public final class CodeStore {
         return code.substring(0, code.length() - safeKeepTailLength);
     }
 
+    public static boolean isToastPromptEnabled(Context context) {
+        return prefs(context).getBoolean(KEY_TOAST_PROMPT_ENABLED, true);
+    }
+
+    public static int getToastPromptDurationSeconds(Context context) {
+        return clampToastPromptDurationSeconds(
+                prefs(context).getInt(KEY_TOAST_PROMPT_DURATION_SECONDS, DEFAULT_TOAST_PROMPT_DURATION_SECONDS)
+        );
+    }
+
+    public static void setToastPrompt(Context context, boolean enabled, int durationSeconds) {
+        prefs(context).edit()
+                .putBoolean(KEY_TOAST_PROMPT_ENABLED, enabled)
+                .putInt(KEY_TOAST_PROMPT_DURATION_SECONDS, clampToastPromptDurationSeconds(durationSeconds))
+                .apply();
+    }
+
     public static String extractCode(Context context, CharSequence text) {
         return extractCode(text, getRegex(context));
     }
@@ -348,6 +369,10 @@ public final class CodeStore {
 
     private static int clampSemiAutoKeepTailLength(int keepTailLength) {
         return Math.max(0, Math.min(MAX_SEMI_AUTO_KEEP_TAIL_LENGTH, keepTailLength));
+    }
+
+    private static int clampToastPromptDurationSeconds(int durationSeconds) {
+        return Math.max(1, Math.min(MAX_TOAST_PROMPT_DURATION_SECONDS, durationSeconds));
     }
 
     private static void appendHistory(Context context, String code, String source, long savedAtMs) {

@@ -8,10 +8,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -104,6 +102,8 @@ private fun LspModuleScreen(
     var clipboardBridgeEnabled by remember { mutableStateOf(CodeStore.isClipboardBridgeEnabled(context)) }
     var semiAutoEnabled by remember { mutableStateOf(CodeStore.isSemiAutoEnabled(context)) }
     var semiAutoKeepTailLength by remember { mutableStateOf(CodeStore.getSemiAutoKeepTailLength(context).toString()) }
+    var toastPromptEnabled by remember { mutableStateOf(CodeStore.isToastPromptEnabled(context)) }
+    var toastPromptDurationSeconds by remember { mutableStateOf(CodeStore.getToastPromptDurationSeconds(context).toString()) }
 
     var lastCode by remember { mutableStateOf(CodeStore.getLastCode(context)) }
     var lastSource by remember { mutableStateOf(CodeStore.getLastSource(context)) }
@@ -111,7 +111,6 @@ private fun LspModuleScreen(
     var lastCodeAt by remember { mutableLongStateOf(CodeStore.getLastCodeSavedAtMs(context)) }
     var lastSmsReceivedAt by remember { mutableLongStateOf(CodeStore.getLastSmsReceivedAtMs(context)) }
     var smsPermissionGranted by remember { mutableStateOf(hasSmsPermission(context)) }
-    var notificationPermissionGranted by remember { mutableStateOf(hasNotificationPermission(context)) }
     var clipboardOtpState by remember { mutableStateOf(readPendingOtpState(context)) }
     var receiveDiagnostic by remember { mutableStateOf(CodeStore.getReceiveDiagnostic(context)) }
     var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -128,15 +127,7 @@ private fun LspModuleScreen(
     ) { granted ->
         smsPermissionGranted = granted
         if (!granted) {
-            openAppPermissionSettings(context)
-        }
-    }
-    val notificationPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission(),
-    ) { granted ->
-        notificationPermissionGranted = granted
-        if (!granted) {
-            openAppPermissionSettings(context)
+            onToast("未授予短信权限")
         }
     }
 
@@ -147,7 +138,6 @@ private fun LspModuleScreen(
         lastCodeAt = CodeStore.getLastCodeSavedAtMs(context)
         lastSmsReceivedAt = CodeStore.getLastSmsReceivedAtMs(context)
         smsPermissionGranted = hasSmsPermission(context)
-        notificationPermissionGranted = hasNotificationPermission(context)
         clipboardOtpState = resolveOtpState(
             context = context,
             readClipboard = readClipboard,
@@ -220,6 +210,7 @@ private fun LspModuleScreen(
         CodeStore.setRegex(context, regex.trim())
         CodeStore.setClipboardBridgeEnabled(context, clipboardBridgeEnabled)
         CodeStore.setSemiAuto(context, semiAutoEnabled, semiAutoKeepTailLength.toIntOrNull() ?: 2)
+        CodeStore.setToastPrompt(context, toastPromptEnabled, toastPromptDurationSeconds.toIntOrNull() ?: 2)
         CodeStore.ensurePrefsReadable(context)
         refreshStatus(readClipboard = true)
         onToast("已保存")
@@ -304,21 +295,6 @@ private fun LspModuleScreen(
                         }
                     },
                 )
-                StatusRow(
-                    label = "通知权限",
-                    value = if (notificationPermissionGranted) "已授权" else "未授权",
-                    onClick = if (notificationPermissionGranted) {
-                        null
-                    } else {
-                        {
-                            if (Build.VERSION.SDK_INT >= 33) {
-                                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                            } else {
-                                openAppPermissionSettings(context)
-                            }
-                        }
-                    },
-                )
             }
 
             SectionCard(
@@ -355,17 +331,25 @@ private fun LspModuleScreen(
                     clipboardBridgeEnabled = clipboardBridgeEnabled,
                     semiAutoEnabled = semiAutoEnabled,
                     semiAutoKeepTailLength = semiAutoKeepTailLength,
+                    toastPromptEnabled = toastPromptEnabled,
+                    toastPromptDurationSeconds = toastPromptDurationSeconds,
                     onRegexChange = { regex = it },
                     onClipboardBridgeEnabledChange = { clipboardBridgeEnabled = it },
                     onSemiAutoEnabledChange = { semiAutoEnabled = it },
                     onSemiAutoKeepTailLengthChange = { value ->
                         semiAutoKeepTailLength = value.filter { it.isDigit() }.take(1)
                     },
+                    onToastPromptEnabledChange = { toastPromptEnabled = it },
+                    onToastPromptDurationSecondsChange = { value ->
+                        toastPromptDurationSeconds = value.filter { it.isDigit() }.take(2)
+                    },
                     onDismiss = {
                         regex = CodeStore.getRegex(context)
                         clipboardBridgeEnabled = CodeStore.isClipboardBridgeEnabled(context)
                         semiAutoEnabled = CodeStore.isSemiAutoEnabled(context)
                         semiAutoKeepTailLength = CodeStore.getSemiAutoKeepTailLength(context).toString()
+                        toastPromptEnabled = CodeStore.isToastPromptEnabled(context)
+                        toastPromptDurationSeconds = CodeStore.getToastPromptDurationSeconds(context).toString()
                         showSettings = false
                     },
                     onSave = {
@@ -712,10 +696,14 @@ private fun SettingsDialog(
     clipboardBridgeEnabled: Boolean,
     semiAutoEnabled: Boolean,
     semiAutoKeepTailLength: String,
+    toastPromptEnabled: Boolean,
+    toastPromptDurationSeconds: String,
     onRegexChange: (String) -> Unit,
     onClipboardBridgeEnabledChange: (Boolean) -> Unit,
     onSemiAutoEnabledChange: (Boolean) -> Unit,
     onSemiAutoKeepTailLengthChange: (String) -> Unit,
+    onToastPromptEnabledChange: (Boolean) -> Unit,
+    onToastPromptDurationSecondsChange: (String) -> Unit,
     onDismiss: () -> Unit,
     onSave: () -> Unit,
 ) {
@@ -767,6 +755,28 @@ private fun SettingsDialog(
                     enabled = semiAutoEnabled,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Checkbox(
+                        checked = toastPromptEnabled,
+                        onCheckedChange = onToastPromptEnabledChange,
+                    )
+                    Text(
+                        text = "收到验证码提示",
+                        style = MaterialTheme.typography.bodyLarge,
+                    )
+                }
+                OutlinedTextField(
+                    value = toastPromptDurationSeconds,
+                    onValueChange = onToastPromptDurationSecondsChange,
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("提示秒数") },
+                    singleLine = true,
+                    enabled = toastPromptEnabled,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                )
             }
         },
         dismissButton = {
@@ -794,29 +804,6 @@ private fun hasSmsPermission(context: Context): Boolean {
         context,
         Manifest.permission.RECEIVE_SMS,
     ) == PackageManager.PERMISSION_GRANTED
-}
-
-private fun hasNotificationPermission(context: Context): Boolean {
-    return Build.VERSION.SDK_INT < 33 || ContextCompat.checkSelfPermission(
-        context,
-        Manifest.permission.POST_NOTIFICATIONS,
-    ) == PackageManager.PERMISSION_GRANTED
-}
-
-private fun openAppPermissionSettings(context: Context) {
-    val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
-        .setData(Uri.fromParts("package", context.packageName, null))
-    startActivitySafely(context, intent)
-}
-
-private fun startActivitySafely(context: Context, intent: Intent): Boolean {
-    return try {
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        context.startActivity(intent)
-        true
-    } catch (_: Throwable) {
-        false
-    }
 }
 
 private data class ClipboardOtpState(

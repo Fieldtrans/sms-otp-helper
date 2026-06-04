@@ -78,4 +78,26 @@ class CodeStoreTest {
 
         assertEquals("246810", code)
     }
+
+    @Test
+    fun applySemiAuto_returnsOriginalWhenDisabled() {
+        assertEquals("123456", CodeStore.applySemiAuto("123456", false, 2))
+    }
+
+    @Test
+    fun applySemiAuto_keepsTailUnfilled() {
+        assertEquals("1234", CodeStore.applySemiAuto("123456", true, 2))
+        assertEquals("AB12", CodeStore.applySemiAuto("AB12CD", true, 2))
+    }
+
+    @Test
+    fun applySemiAuto_returnsOriginalWhenTailLengthIsZero() {
+        assertEquals("123456", CodeStore.applySemiAuto("123456", true, 0))
+    }
+
+    @Test
+    fun applySemiAuto_returnsEmptyWhenTailCoversWholeCode() {
+        assertEquals("", CodeStore.applySemiAuto("12", true, 2))
+        assertEquals("", CodeStore.applySemiAuto("1234", true, 8))
+    }
 }

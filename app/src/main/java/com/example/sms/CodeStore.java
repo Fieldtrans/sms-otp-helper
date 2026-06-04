@@ -24,7 +24,9 @@ public final class CodeStore {
     private static final String KEY_LAST_SMS_BODY = "last_sms_body";
     private static final String KEY_LAST_SMS_RECEIVED_AT_MS = "last_sms_received_at_ms";
     private static final String KEY_CODE_HISTORY = "code_history";
-    private static final String KEY_CLIPBOARD_BRIDGE_ENABLED = "clipboard_bridge_enabled";
+    public static final String KEY_CLIPBOARD_BRIDGE_ENABLED = "clipboard_bridge_enabled";
+    public static final String KEY_SEMI_AUTO_ENABLED = "semi_auto_enabled";
+    public static final String KEY_SEMI_AUTO_KEEP_TAIL_LENGTH = "semi_auto_keep_tail_length";
     private static final String KEY_PENDING_CODE = "pending_code";
     private static final String KEY_PENDING_CODE_SAVED_AT_MS = "pending_code_saved_at_ms";
     private static final String KEY_DIAG_ENTRY = "diag_entry";
@@ -46,6 +48,8 @@ public final class CodeStore {
     private static final long CODE_TTL_MS = 10 * 60_000L; // 10分钟，方便调试
     private static final long HISTORY_TTL_MS = 10 * 60_000L;
     private static final int HISTORY_LIMIT = 20;
+    private static final int DEFAULT_SEMI_AUTO_KEEP_TAIL_LENGTH = 2;
+    private static final int MAX_SEMI_AUTO_KEEP_TAIL_LENGTH = 8;
 
     private CodeStore() {
     }
@@ -225,6 +229,43 @@ public final class CodeStore {
         ensurePrefsReadable(context);
     }
 
+    public static boolean isSemiAutoEnabled(Context context) {
+        return prefs(context).getBoolean(KEY_SEMI_AUTO_ENABLED, false);
+    }
+
+    public static int getSemiAutoKeepTailLength(Context context) {
+        return clampSemiAutoKeepTailLength(
+                prefs(context).getInt(KEY_SEMI_AUTO_KEEP_TAIL_LENGTH, DEFAULT_SEMI_AUTO_KEEP_TAIL_LENGTH)
+        );
+    }
+
+    public static void setSemiAuto(Context context, boolean enabled, int keepTailLength) {
+        int safeKeepTailLength = clampSemiAutoKeepTailLength(keepTailLength);
+        prefs(context).edit()
+                .putBoolean(KEY_SEMI_AUTO_ENABLED, enabled)
+                .putInt(KEY_SEMI_AUTO_KEEP_TAIL_LENGTH, safeKeepTailLength)
+                .apply();
+        publicPrefs(context).edit()
+                .putBoolean(KEY_SEMI_AUTO_ENABLED, enabled)
+                .putInt(KEY_SEMI_AUTO_KEEP_TAIL_LENGTH, safeKeepTailLength)
+                .apply();
+        ensurePrefsReadable(context);
+    }
+
+    public static String applySemiAuto(String code, boolean enabled, int keepTailLength) {
+        if (code == null || code.length() == 0 || !enabled) {
+            return code == null ? "" : code;
+        }
+        int safeKeepTailLength = clampSemiAutoKeepTailLength(keepTailLength);
+        if (safeKeepTailLength <= 0) {
+            return code;
+        }
+        if (code.length() <= safeKeepTailLength) {
+            return "";
+        }
+        return code.substring(0, code.length() - safeKeepTailLength);
+    }
+
     public static String extractCode(Context context, CharSequence text) {
         return extractCode(text, getRegex(context));
     }
@@ -298,9 +339,15 @@ public final class CodeStore {
         try {
             publicPrefs(context).edit()
                     .putBoolean(KEY_CLIPBOARD_BRIDGE_ENABLED, prefs(context).getBoolean(KEY_CLIPBOARD_BRIDGE_ENABLED, true))
+                    .putBoolean(KEY_SEMI_AUTO_ENABLED, prefs(context).getBoolean(KEY_SEMI_AUTO_ENABLED, false))
+                    .putInt(KEY_SEMI_AUTO_KEEP_TAIL_LENGTH, getSemiAutoKeepTailLength(context))
                     .apply();
         } catch (Throwable ignored) {
         }
+    }
+
+    private static int clampSemiAutoKeepTailLength(int keepTailLength) {
+        return Math.max(0, Math.min(MAX_SEMI_AUTO_KEEP_TAIL_LENGTH, keepTailLength));
     }
 
     private static void appendHistory(Context context, String code, String source, long savedAtMs) {

@@ -422,7 +422,11 @@ public class VerifyHook implements IXposedHookLoadPackage {
             if (clipboardOtp.isEmpty() || isRecentlyFilled(clipboardOtp.key)) {
                 return;
             }
-            if (inputConnection.commitText(clipboardOtp.code, 1)) {
+            String fillCode = buildFillCode(clipboardOtp.code);
+            if (TextUtils.isEmpty(fillCode)) {
+                return;
+            }
+            if (inputConnection.commitText(fillCode, 1)) {
                 rememberFilled(clipboardOtp.key);
                 markManagedClipboardFilled(context, clipboardOtp.code);
                 notifyCodeFilled(context, clipboardOtp.code);
@@ -634,7 +638,17 @@ public class VerifyHook implements IXposedHookLoadPackage {
 
     private boolean isClipboardBridgeEnabled() {
         reloadPrefs();
-        return modulePrefs == null || modulePrefs.getBoolean("clipboard_bridge_enabled", true);
+        return modulePrefs == null || modulePrefs.getBoolean(CodeStore.KEY_CLIPBOARD_BRIDGE_ENABLED, true);
+    }
+
+    private String buildFillCode(String code) {
+        reloadPrefs();
+        boolean semiAutoEnabled = modulePrefs != null
+                && modulePrefs.getBoolean(CodeStore.KEY_SEMI_AUTO_ENABLED, false);
+        int keepTailLength = modulePrefs == null
+                ? 2
+                : modulePrefs.getInt(CodeStore.KEY_SEMI_AUTO_KEEP_TAIL_LENGTH, 2);
+        return CodeStore.applySemiAuto(code, semiAutoEnabled, keepTailLength);
     }
 
     private String buildClipLabel(long createdAtMs) {

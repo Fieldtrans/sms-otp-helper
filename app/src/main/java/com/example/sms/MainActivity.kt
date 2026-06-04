@@ -102,6 +102,8 @@ private fun LspModuleScreen(
 
     var regex by remember { mutableStateOf(CodeStore.getRegex(context)) }
     var clipboardBridgeEnabled by remember { mutableStateOf(CodeStore.isClipboardBridgeEnabled(context)) }
+    var semiAutoEnabled by remember { mutableStateOf(CodeStore.isSemiAutoEnabled(context)) }
+    var semiAutoKeepTailLength by remember { mutableStateOf(CodeStore.getSemiAutoKeepTailLength(context).toString()) }
 
     var lastCode by remember { mutableStateOf(CodeStore.getLastCode(context)) }
     var lastSource by remember { mutableStateOf(CodeStore.getLastSource(context)) }
@@ -151,7 +153,6 @@ private fun LspModuleScreen(
             nowMs = nowMs,
         )
         receiveDiagnostic = CodeStore.getReceiveDiagnostic(context)
-        clipboardBridgeEnabled = CodeStore.isClipboardBridgeEnabled(context)
         codeHistory = CodeStore.getCodeHistory(context)
     }
 
@@ -216,6 +217,7 @@ private fun LspModuleScreen(
     fun saveSettings() {
         CodeStore.setRegex(context, regex.trim())
         CodeStore.setClipboardBridgeEnabled(context, clipboardBridgeEnabled)
+        CodeStore.setSemiAuto(context, semiAutoEnabled, semiAutoKeepTailLength.toIntOrNull() ?: 2)
         CodeStore.ensurePrefsReadable(context)
         refreshStatus(readClipboard = true)
         onToast("已保存")
@@ -345,11 +347,19 @@ private fun LspModuleScreen(
                 SettingsDialog(
                     regex = regex,
                     clipboardBridgeEnabled = clipboardBridgeEnabled,
+                    semiAutoEnabled = semiAutoEnabled,
+                    semiAutoKeepTailLength = semiAutoKeepTailLength,
                     onRegexChange = { regex = it },
                     onClipboardBridgeEnabledChange = { clipboardBridgeEnabled = it },
+                    onSemiAutoEnabledChange = { semiAutoEnabled = it },
+                    onSemiAutoKeepTailLengthChange = { value ->
+                        semiAutoKeepTailLength = value.filter { it.isDigit() }.take(1)
+                    },
                     onDismiss = {
                         regex = CodeStore.getRegex(context)
                         clipboardBridgeEnabled = CodeStore.isClipboardBridgeEnabled(context)
+                        semiAutoEnabled = CodeStore.isSemiAutoEnabled(context)
+                        semiAutoKeepTailLength = CodeStore.getSemiAutoKeepTailLength(context).toString()
                         showSettings = false
                     },
                     onSave = {
@@ -682,8 +692,12 @@ private fun CodeHistoryDialog(
 private fun SettingsDialog(
     regex: String,
     clipboardBridgeEnabled: Boolean,
+    semiAutoEnabled: Boolean,
+    semiAutoKeepTailLength: String,
     onRegexChange: (String) -> Unit,
     onClipboardBridgeEnabledChange: (Boolean) -> Unit,
+    onSemiAutoEnabledChange: (Boolean) -> Unit,
+    onSemiAutoKeepTailLengthChange: (String) -> Unit,
     onDismiss: () -> Unit,
     onSave: () -> Unit,
 ) {
@@ -713,6 +727,28 @@ private fun SettingsDialog(
                         style = MaterialTheme.typography.bodyLarge,
                     )
                 }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Checkbox(
+                        checked = semiAutoEnabled,
+                        onCheckedChange = onSemiAutoEnabledChange,
+                    )
+                    Text(
+                        text = "半自动填入",
+                        style = MaterialTheme.typography.bodyLarge,
+                    )
+                }
+                OutlinedTextField(
+                    value = semiAutoKeepTailLength,
+                    onValueChange = onSemiAutoKeepTailLengthChange,
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("最后几位不填") },
+                    singleLine = true,
+                    enabled = semiAutoEnabled,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                )
             }
         },
         dismissButton = {

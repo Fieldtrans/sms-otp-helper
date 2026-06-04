@@ -17,4 +17,8 @@ public class XSharedPreferences {
     public String getString(String key, String defValue) {
         return defValue;
     }
+
+    public int getInt(String key, int defValue) {
+        return defValue;
+    }
 }

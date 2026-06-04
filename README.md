@@ -22,16 +22,6 @@
 4. 当前输入法检测到临时验证码后自动填入。
 5. 填入成功后只标记为已填入，避免重复输入；临时剪贴板仍按生成时间 90 秒后清理。
 
-## 电脑辅助脚本
-
-普通 Android App 不能可靠地自动把 USB 模式切到“文件传输”，这个动作需要系统或特权权限。需要把电脑剪贴板内容写到手机目录时，可以使用 `tools/pc-clipboard-to-phone.ps1`：
-
-```powershell
-powershell -ExecutionPolicy Bypass -File tools\pc-clipboard-to-phone.ps1 -PhoneDir "/sdcard/Download/SMS" -Hotkey "Ctrl+Alt+V"
-```
-
-前提：电脑安装 `adb`，手机开启 USB 调试并连接电脑。脚本启动后按设置的快捷键，会把电脑当前剪贴板内容保存成文本文件并推送到手机指定目录。
-
 ## 发布包
 
 正式版 APK：

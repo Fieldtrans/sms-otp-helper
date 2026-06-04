@@ -34,8 +34,6 @@
 
 [`releases/sms-otp-helper-v1.1.0.apk`](releases/sms-otp-helper-v1.1.0.apk)
 
-[`releases/sms-otp-helper-v1.0.0.apk`](releases/sms-otp-helper-v1.0.0.apk)
-
 SHA256：
 
 `05E391D3BEE16CA7609C3C0E3A9484E5254E4D1CF5DCDABBFBBC5237A482A906`

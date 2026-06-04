@@ -33,6 +33,7 @@ public class OtpSmsReceiver extends BroadcastReceiver {
         // 如果提取到验证码，复制到剪贴板
         if (!TextUtils.isEmpty(code)) {
             ClipboardFallback.write(context, code);
+            OtpPcExport.writeLatest(context, code);
             OtpNotifier.notifyReady(context, code);
         }
 

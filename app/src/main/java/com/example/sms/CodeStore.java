@@ -29,6 +29,7 @@ public final class CodeStore {
     public static final String KEY_SEMI_AUTO_KEEP_TAIL_LENGTH = "semi_auto_keep_tail_length";
     private static final String KEY_TOAST_PROMPT_ENABLED = "toast_prompt_enabled";
     private static final String KEY_TOAST_PROMPT_DURATION_SECONDS = "toast_prompt_duration_seconds";
+    private static final String KEY_PC_EXPORT_ENABLED = "pc_export_enabled";
     private static final String KEY_PENDING_CODE = "pending_code";
     private static final String KEY_PENDING_CODE_SAVED_AT_MS = "pending_code_saved_at_ms";
     private static final String KEY_DIAG_ENTRY = "diag_entry";
@@ -284,6 +285,16 @@ public final class CodeStore {
         prefs(context).edit()
                 .putBoolean(KEY_TOAST_PROMPT_ENABLED, enabled)
                 .putInt(KEY_TOAST_PROMPT_DURATION_SECONDS, clampToastPromptDurationSeconds(durationSeconds))
+                .apply();
+    }
+
+    public static boolean isPcExportEnabled(Context context) {
+        return prefs(context).getBoolean(KEY_PC_EXPORT_ENABLED, false);
+    }
+
+    public static void setPcExportEnabled(Context context, boolean enabled) {
+        prefs(context).edit()
+                .putBoolean(KEY_PC_EXPORT_ENABLED, enabled)
                 .apply();
     }
 

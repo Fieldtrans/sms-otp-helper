@@ -104,6 +104,7 @@ private fun LspModuleScreen(
     var semiAutoKeepTailLength by remember { mutableStateOf(CodeStore.getSemiAutoKeepTailLength(context).toString()) }
     var toastPromptEnabled by remember { mutableStateOf(CodeStore.isToastPromptEnabled(context)) }
     var toastPromptDurationSeconds by remember { mutableStateOf(CodeStore.getToastPromptDurationSeconds(context).toString()) }
+    var pcExportEnabled by remember { mutableStateOf(CodeStore.isPcExportEnabled(context)) }
 
     var lastCode by remember { mutableStateOf(CodeStore.getLastCode(context)) }
     var lastSource by remember { mutableStateOf(CodeStore.getLastSource(context)) }
@@ -211,6 +212,7 @@ private fun LspModuleScreen(
         CodeStore.setClipboardBridgeEnabled(context, clipboardBridgeEnabled)
         CodeStore.setSemiAuto(context, semiAutoEnabled, semiAutoKeepTailLength.toIntOrNull() ?: 2)
         CodeStore.setToastPrompt(context, toastPromptEnabled, toastPromptDurationSeconds.toIntOrNull() ?: 2)
+        CodeStore.setPcExportEnabled(context, pcExportEnabled)
         CodeStore.ensurePrefsReadable(context)
         refreshStatus(readClipboard = true)
         onToast("已保存")
@@ -224,6 +226,7 @@ private fun LspModuleScreen(
         CodeStore.saveReceiveDiagnostic(context, "manual-test", context.packageName, body, code)
         try {
             ClipboardFallback.write(context, code)
+            OtpPcExport.writeLatest(context, code)
             OtpNotifier.notifyReady(context, code)
         } catch (_: Throwable) {
         }
@@ -333,6 +336,7 @@ private fun LspModuleScreen(
                     semiAutoKeepTailLength = semiAutoKeepTailLength,
                     toastPromptEnabled = toastPromptEnabled,
                     toastPromptDurationSeconds = toastPromptDurationSeconds,
+                    pcExportEnabled = pcExportEnabled,
                     onRegexChange = { regex = it },
                     onClipboardBridgeEnabledChange = { clipboardBridgeEnabled = it },
                     onSemiAutoEnabledChange = { semiAutoEnabled = it },
@@ -343,6 +347,7 @@ private fun LspModuleScreen(
                     onToastPromptDurationSecondsChange = { value ->
                         toastPromptDurationSeconds = value.filter { it.isDigit() }.take(2)
                     },
+                    onPcExportEnabledChange = { pcExportEnabled = it },
                     onDismiss = {
                         regex = CodeStore.getRegex(context)
                         clipboardBridgeEnabled = CodeStore.isClipboardBridgeEnabled(context)
@@ -350,6 +355,7 @@ private fun LspModuleScreen(
                         semiAutoKeepTailLength = CodeStore.getSemiAutoKeepTailLength(context).toString()
                         toastPromptEnabled = CodeStore.isToastPromptEnabled(context)
                         toastPromptDurationSeconds = CodeStore.getToastPromptDurationSeconds(context).toString()
+                        pcExportEnabled = CodeStore.isPcExportEnabled(context)
                         showSettings = false
                     },
                     onSave = {
@@ -698,12 +704,14 @@ private fun SettingsDialog(
     semiAutoKeepTailLength: String,
     toastPromptEnabled: Boolean,
     toastPromptDurationSeconds: String,
+    pcExportEnabled: Boolean,
     onRegexChange: (String) -> Unit,
     onClipboardBridgeEnabledChange: (Boolean) -> Unit,
     onSemiAutoEnabledChange: (Boolean) -> Unit,
     onSemiAutoKeepTailLengthChange: (String) -> Unit,
     onToastPromptEnabledChange: (Boolean) -> Unit,
     onToastPromptDurationSecondsChange: (String) -> Unit,
+    onPcExportEnabledChange: (Boolean) -> Unit,
     onDismiss: () -> Unit,
     onSave: () -> Unit,
 ) {
@@ -711,7 +719,10 @@ private fun SettingsDialog(
         onDismissRequest = onDismiss,
         title = { Text("设置") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
                 OutlinedTextField(
                     value = regex,
                     onValueChange = onRegexChange,
@@ -777,6 +788,19 @@ private fun SettingsDialog(
                     enabled = toastPromptEnabled,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Checkbox(
+                        checked = pcExportEnabled,
+                        onCheckedChange = onPcExportEnabledChange,
+                    )
+                    Text(
+                        text = "导出给电脑",
+                        style = MaterialTheme.typography.bodyLarge,
+                    )
+                }
             }
         },
         dismissButton = {

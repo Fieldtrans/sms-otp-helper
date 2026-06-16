@@ -16,9 +16,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,20 +28,40 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Computer
+import androidx.compose.material.icons.filled.ContentPaste
+import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -59,8 +77,10 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
@@ -82,18 +102,41 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            SMSTheme {
+            val context = androidx.compose.ui.platform.LocalContext.current
+            var dynamicColorEnabled by remember { mutableStateOf(CodeStore.isDynamicColorEnabled(context)) }
+            var themeRefreshKey by remember { mutableLongStateOf(0L) }
+            DisposableEffect(this) {
+                val observer = LifecycleEventObserver { _, event ->
+                    if (event == Lifecycle.Event.ON_RESUME) {
+                        themeRefreshKey++
+                    }
+                }
+                lifecycle.addObserver(observer)
+                onDispose {
+                    lifecycle.removeObserver(observer)
+                }
+            }
+            SMSTheme(
+                dynamicColor = dynamicColorEnabled,
+                refreshKey = themeRefreshKey,
+            ) {
                 LspModuleScreen(
                     onToast = { Toast.makeText(this, it, Toast.LENGTH_SHORT).show() },
+                    onDynamicColorChanged = {
+                        dynamicColorEnabled = it
+                        themeRefreshKey++
+                    },
                 )
             }
         }
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun LspModuleScreen(
     onToast: (String) -> Unit,
+    onDynamicColorChanged: (Boolean) -> Unit,
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val activity = context as? ComponentActivity
@@ -105,6 +148,7 @@ private fun LspModuleScreen(
     var toastPromptEnabled by remember { mutableStateOf(CodeStore.isToastPromptEnabled(context)) }
     var toastPromptDurationSeconds by remember { mutableStateOf(CodeStore.getToastPromptDurationSeconds(context).toString()) }
     var pcExportEnabled by remember { mutableStateOf(CodeStore.isPcExportEnabled(context)) }
+    var dynamicColorEnabled by remember { mutableStateOf(CodeStore.isDynamicColorEnabled(context)) }
 
     var lastCode by remember { mutableStateOf(CodeStore.getLastCode(context)) }
     var lastSource by remember { mutableStateOf(CodeStore.getLastSource(context)) }
@@ -213,7 +257,9 @@ private fun LspModuleScreen(
         CodeStore.setSemiAuto(context, semiAutoEnabled, semiAutoKeepTailLength.toIntOrNull() ?: 2)
         CodeStore.setToastPrompt(context, toastPromptEnabled, toastPromptDurationSeconds.toIntOrNull() ?: 2)
         CodeStore.setPcExportEnabled(context, pcExportEnabled)
+        CodeStore.setDynamicColorEnabled(context, dynamicColorEnabled)
         CodeStore.ensurePrefsReadable(context)
+        onDynamicColorChanged(dynamicColorEnabled)
         refreshStatus(readClipboard = true)
         onToast("已保存")
     }
@@ -239,45 +285,40 @@ private fun LspModuleScreen(
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
-        containerColor = Color(0xFFF6F7F9),
+        containerColor = MaterialTheme.colorScheme.surface,
+        topBar = {
+            CenterAlignedTopAppBar(
+                title = {
+                    Text(
+                        text = "短信验证码助手",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                },
+                actions = {
+                    IconButton(onClick = { showSettings = true }) {
+                        Icon(
+                            imageVector = Icons.Filled.Settings,
+                            contentDescription = "设置",
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    titleContentColor = MaterialTheme.colorScheme.onSurface,
+                    actionIconContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                ),
+            )
+        },
     ) { innerPadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 18.dp, vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = "短信验证码助手",
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold,
-                )
-                IconButton(
-                    onClick = { showSettings = true },
-                    modifier = Modifier
-                        .size(44.dp)
-                        .background(Color.White, RoundedCornerShape(22.dp)),
-                ) {
-                    Text(
-                        text = "⋮",
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold,
-                    )
-                }
-            }
-            Text(
-                text = "短信侧提取验证码，当前输入法从临时保存区自动填入。",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-
             SectionCard(
                 title = "环境状态",
                 summary = "确认 LSPosed 作用域和短信接收权限。",
@@ -285,11 +326,13 @@ private fun LspModuleScreen(
                 StatusRow(
                     label = "作用域状态",
                     value = "已配置",
+                    icon = Icons.Filled.CheckCircle,
                     onClick = null,
                 )
                 StatusRow(
                     label = "短信权限",
                     value = if (smsPermissionGranted) "已授权" else "未授权",
+                    icon = if (smsPermissionGranted) Icons.Filled.CheckCircle else Icons.Filled.ErrorOutline,
                     onClick = if (smsPermissionGranted) {
                         null
                     } else {
@@ -305,9 +348,12 @@ private fun LspModuleScreen(
                 summary = "这里显示准备自动填入的验证码，填入后会标记，90 秒后自动失效。",
             ) {
                 SimulateSmsButton(onClick = ::simulateSmsReceipt)
-                Spacer(Modifier.height(12.dp))
-                ClipboardCodeBlock(clipboardOtpState, nowMs)
-                Spacer(Modifier.height(12.dp))
+                ClipboardCodeBlock(
+                    state = clipboardOtpState,
+                    nowMs = nowMs,
+                    semiAutoEnabled = semiAutoEnabled,
+                    keepTailLength = semiAutoKeepTailLength.toIntOrNull() ?: 2,
+                )
                 RecentCodeBlock(
                     code = lastCode,
                     timestamp = lastCodeAt,
@@ -337,6 +383,7 @@ private fun LspModuleScreen(
                     toastPromptEnabled = toastPromptEnabled,
                     toastPromptDurationSeconds = toastPromptDurationSeconds,
                     pcExportEnabled = pcExportEnabled,
+                    dynamicColorEnabled = dynamicColorEnabled,
                     onRegexChange = { regex = it },
                     onClipboardBridgeEnabledChange = { clipboardBridgeEnabled = it },
                     onSemiAutoEnabledChange = { semiAutoEnabled = it },
@@ -348,6 +395,7 @@ private fun LspModuleScreen(
                         toastPromptDurationSeconds = value.filter { it.isDigit() }.take(2)
                     },
                     onPcExportEnabledChange = { pcExportEnabled = it },
+                    onDynamicColorEnabledChange = { dynamicColorEnabled = it },
                     onDismiss = {
                         regex = CodeStore.getRegex(context)
                         clipboardBridgeEnabled = CodeStore.isClipboardBridgeEnabled(context)
@@ -356,6 +404,7 @@ private fun LspModuleScreen(
                         toastPromptEnabled = CodeStore.isToastPromptEnabled(context)
                         toastPromptDurationSeconds = CodeStore.getToastPromptDurationSeconds(context).toString()
                         pcExportEnabled = CodeStore.isPcExportEnabled(context)
+                        dynamicColorEnabled = CodeStore.isDynamicColorEnabled(context)
                         showSettings = false
                     },
                     onSave = {
@@ -370,62 +419,83 @@ private fun LspModuleScreen(
 
 @Composable
 private fun ReceiveDiagnosticBlock(diagnostic: CodeStore.ReceiveDiagnostic) {
-    Column(
+    Surface(
         modifier = Modifier
-            .fillMaxWidth()
-            .background(Color(0xFFF8FAFC), RoundedCornerShape(18.dp))
-            .padding(horizontal = 14.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+            .fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
-        Text(
-            text = "接收诊断",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(
-            text = if (diagnostic.receivedAtMs <= 0L) "还没有接收记录" else diagnostic.entry.ifBlank { "未知入口" },
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-            fontWeight = FontWeight.Bold,
-        )
-        Text(
-            text = "时间：${formatTime(diagnostic.receivedAtMs)}",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(
-            text = "包名：${diagnostic.packageName.ifBlank { "无" }}",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(
-            text = "匹配：${diagnostic.code.ifBlank { "未匹配" }}",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(
-            text = diagnostic.preview.ifBlank { "无内容预览" },
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        Column(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Tune,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(18.dp),
+                )
+                Text(
+                    text = "接收诊断",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Text(
+                text = if (diagnostic.receivedAtMs <= 0L) "还没有接收记录" else diagnostic.entry.ifBlank { "未知入口" },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                text = "时间：${formatTime(diagnostic.receivedAtMs)}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                text = "包名：${diagnostic.packageName.ifBlank { "无" }}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                text = "匹配：${diagnostic.code.ifBlank { "未匹配" }}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                text = diagnostic.preview.ifBlank { "无内容预览" },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 
 @Composable
 private fun SimulateSmsButton(onClick: () -> Unit) {
-    Box(
+    FilledTonalButton(
+        onClick = onClick,
         modifier = Modifier
-            .fillMaxWidth()
-            .background(Color(0xFFDCFCE7), RoundedCornerShape(18.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 13.dp),
-        contentAlignment = Alignment.Center,
+            .fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = ButtonDefaults.filledTonalButtonColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer,
+            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+        ),
     ) {
+        Icon(
+            imageVector = Icons.Filled.PlayArrow,
+            contentDescription = null,
+            modifier = Modifier.size(18.dp),
+        )
+        Spacer(Modifier.size(ButtonDefaults.IconSpacing))
         Text(
             text = "模拟收到短信验证码",
-            style = MaterialTheme.typography.bodyLarge,
-            color = Color(0xFF166534),
-            fontWeight = FontWeight.Bold,
+            fontWeight = FontWeight.SemiBold,
         )
     }
 }
@@ -438,19 +508,22 @@ private fun SectionCard(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
             content = {
                 Text(
                     text = title,
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
+                    fontWeight = FontWeight.SemiBold,
                 )
                 Text(
                     text = summary,
@@ -465,69 +538,103 @@ private fun SectionCard(
 }
 
 @Composable
-private fun StatusRow(label: String, value: String) {
-    StatusRow(label = label, value = value, onClick = null)
-}
-
-@Composable
-private fun StatusRow(label: String, value: String, onClick: (() -> Unit)?) {
+private fun StatusRow(
+    label: String,
+    value: String,
+    icon: ImageVector,
+    onClick: (() -> Unit)?,
+) {
     val positive = value == "已配置" || value == "已授权"
-    var badgeModifier = Modifier.background(
-        color = if (positive) Color(0xFFE8F5EC) else Color(0xFFFFF3E0),
-        shape = RoundedCornerShape(999.dp),
-    )
-    if (onClick != null) {
-        badgeModifier = badgeModifier.clickable(onClick = onClick)
+    val chipColor = if (positive) {
+        MaterialTheme.colorScheme.primaryContainer
+    } else {
+        MaterialTheme.colorScheme.errorContainer
+    }
+    val chipContentColor = if (positive) {
+        MaterialTheme.colorScheme.onPrimaryContainer
+    } else {
+        MaterialTheme.colorScheme.onErrorContainer
     }
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyLarge,
-        )
-        Box(
-            modifier = badgeModifier
-                .padding(horizontal = 12.dp, vertical = 7.dp),
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp),
+            )
             Text(
-                text = value,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Bold,
-                color = if (positive) Color(0xFF166534) else Color(0xFFB45309),
+                text = label,
+                style = MaterialTheme.typography.bodyLarge,
             )
         }
+        StatusPill(
+            text = value,
+            containerColor = chipColor,
+            contentColor = chipContentColor,
+            onClick = onClick,
+        )
     }
 }
 
 @Composable
-private fun ClipboardCodeBlock(state: ClipboardOtpState, nowMs: Long) {
+private fun ClipboardCodeBlock(
+    state: ClipboardOtpState,
+    nowMs: Long,
+    semiAutoEnabled: Boolean,
+    keepTailLength: Int,
+) {
     val remainingMs = state.remainingMs(nowMs)
     val code = state.displayCode(nowMs)
-    Box(
+    val fillPreview = buildFillPreview(
+        code = if (remainingMs > 0L) state.code else "",
+        semiAutoEnabled = semiAutoEnabled,
+        keepTailLength = keepTailLength,
+    )
+    Surface(
         modifier = Modifier
-            .fillMaxWidth()
-            .background(Color(0xFFE8F5EC), RoundedCornerShape(18.dp))
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+            .fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.primaryContainer,
+        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 14.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(end = 14.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
                 Text(
                     text = "待填入验证码",
                     style = MaterialTheme.typography.bodySmall,
-                    color = Color(0xFF166534),
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
                 )
                 Text(
                     text = code,
                     style = MaterialTheme.typography.headlineMedium,
-                    color = Color(0xFF166534),
-                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = fillPreview,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.78f),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
             CountdownRing(
@@ -538,6 +645,30 @@ private fun ClipboardCodeBlock(state: ClipboardOtpState, nowMs: Long) {
     }
 }
 
+private fun buildFillPreview(
+    code: String,
+    semiAutoEnabled: Boolean,
+    keepTailLength: Int,
+): String {
+    if (code.isBlank()) {
+        return "等待复制验证码"
+    }
+    val fillCode = CodeStore.applySemiAuto(code, semiAutoEnabled, keepTailLength)
+    if (!semiAutoEnabled) {
+        return "将自动输入：$fillCode"
+    }
+    val tailLength = keepTailLength.coerceIn(0, code.length)
+    if (tailLength <= 0) {
+        return "将自动输入：$fillCode"
+    }
+    val tail = code.takeLast(tailLength)
+    return if (fillCode.isBlank()) {
+        "手动输入完整验证码：$tail"
+    } else {
+        "自动输入：$fillCode\n手动补齐：$tail"
+    }
+}
+
 @Composable
 private fun CountdownRing(
     remainingMs: Long,
@@ -545,8 +676,12 @@ private fun CountdownRing(
 ) {
     val progress = (remainingMs.toFloat() / totalMs.toFloat()).coerceIn(0f, 1f)
     val seconds = ceil(remainingMs / 1_000f).toInt().coerceAtLeast(0)
+    val trackColor = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.22f)
+    val indicatorColor = MaterialTheme.colorScheme.onPrimaryContainer
     Box(
-        modifier = Modifier.size(46.dp),
+        modifier = Modifier
+            .size(52.dp)
+            .width(52.dp),
         contentAlignment = Alignment.Center,
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
@@ -554,12 +689,12 @@ private fun CountdownRing(
             val inset = strokeWidth / 2f
             val arcSize = Size(size.width - strokeWidth, size.height - strokeWidth)
             drawCircle(
-                color = Color(0xFFBBF7D0),
+                color = trackColor,
                 radius = (size.minDimension - strokeWidth) / 2f,
                 style = Stroke(width = strokeWidth),
             )
             drawArc(
-                color = Color(0xFF16A34A),
+                color = indicatorColor,
                 startAngle = -90f,
                 sweepAngle = 360f * progress,
                 useCenter = false,
@@ -569,10 +704,10 @@ private fun CountdownRing(
             )
         }
         Text(
-            text = if (seconds > 0) seconds.toString() else "⌛",
+            text = if (seconds > 0) seconds.toString() else "0",
             style = MaterialTheme.typography.labelSmall,
-            color = Color(0xFF166534),
-            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onPrimaryContainer,
+            fontWeight = FontWeight.SemiBold,
         )
     }
 }
@@ -583,38 +718,45 @@ private fun RecentCodeBlock(
     timestamp: Long,
     onClick: () -> Unit,
 ) {
-    Row(
+    Surface(
+        onClick = onClick,
         modifier = Modifier
-            .fillMaxWidth()
-            .background(Color(0xFFEFF6FF), RoundedCornerShape(18.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 12.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
+            .fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(
-                text = "最近验证码",
-                style = MaterialTheme.typography.bodySmall,
-                color = Color(0xFF1D4ED8),
-            )
-            Text(
-                text = if (code.isBlank()) "无" else "$code · ${formatTime(timestamp)}",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-        }
-        Box(
+        Row(
             modifier = Modifier
-                .size(34.dp)
-                .background(Color.White, RoundedCornerShape(17.dp)),
-            contentAlignment = Alignment.Center,
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = "›",
-                style = MaterialTheme.typography.titleLarge,
-                color = Color(0xFF2563EB),
-                fontWeight = FontWeight.Bold,
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.History,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                )
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = "最近验证码",
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+                    Text(
+                        text = if (code.isBlank()) "无" else "$code · ${formatTime(timestamp)}",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+            }
+            Icon(
+                imageVector = Icons.Filled.ChevronRight,
+                contentDescription = null,
+                modifier = Modifier.size(22.dp),
             )
         }
     }
@@ -622,29 +764,71 @@ private fun RecentCodeBlock(
 
 @Composable
 private fun MetricBlock(label: String, value: String, timestamp: Long = 0L) {
-    Column(
+    Surface(
         modifier = Modifier
-            .fillMaxWidth()
-            .background(Color(0xFFF3F4F6), RoundedCornerShape(18.dp))
-            .padding(horizontal = 14.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+            .fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        if (timestamp > 0L) {
+        Column(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
             Text(
-                text = "时间：${formatTime(timestamp)}",
+                text = label,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            Text(
+                text = value,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            if (timestamp > 0L) {
+                Text(
+                    text = "时间：${formatTime(timestamp)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatusPill(
+    text: String,
+    containerColor: Color,
+    contentColor: Color,
+    onClick: (() -> Unit)? = null,
+) {
+    val content: @Composable () -> Unit = {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+        )
+    }
+    if (onClick == null) {
+        Surface(
+            shape = RoundedCornerShape(999.dp),
+            color = containerColor,
+            contentColor = contentColor,
+        ) {
+            Box(modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)) {
+                content()
+            }
+        }
+    } else {
+        Surface(
+            onClick = onClick,
+            shape = RoundedCornerShape(999.dp),
+            color = containerColor,
+            contentColor = contentColor,
+        ) {
+            Box(modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)) {
+                content()
+            }
         }
     }
 }
@@ -656,6 +840,12 @@ private fun CodeHistoryDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
+        icon = {
+            Icon(
+                imageVector = Icons.Filled.History,
+                contentDescription = null,
+            )
+        },
         title = { Text("最近20条验证码") },
         text = {
             Column(
@@ -663,26 +853,33 @@ private fun CodeHistoryDialog(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 if (history.isEmpty()) {
-                    Text("暂无记录")
+                    Text(
+                        text = "暂无记录",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 } else {
                     history.forEach { item ->
-                        Column(
+                        Surface(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .background(Color(0xFFF3F4F6), RoundedCornerShape(18.dp))
-                                .padding(horizontal = 14.dp, vertical = 12.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                                .fillMaxWidth(),
+                            shape = RoundedCornerShape(16.dp),
+                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
                         ) {
-                            Text(
-                                text = item.code,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                            )
-                            Text(
-                                text = "${item.source.ifBlank { "未知来源" }} · ${formatTime(item.savedAtMs)}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
+                            Column(
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
+                                Text(
+                                    text = item.code,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                                Text(
+                                    text = "${item.source.ifBlank { "未知来源" }} · ${formatTime(item.savedAtMs)}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
                         }
                     }
                 }
@@ -705,6 +902,7 @@ private fun SettingsDialog(
     toastPromptEnabled: Boolean,
     toastPromptDurationSeconds: String,
     pcExportEnabled: Boolean,
+    dynamicColorEnabled: Boolean,
     onRegexChange: (String) -> Unit,
     onClipboardBridgeEnabledChange: (Boolean) -> Unit,
     onSemiAutoEnabledChange: (Boolean) -> Unit,
@@ -712,93 +910,88 @@ private fun SettingsDialog(
     onToastPromptEnabledChange: (Boolean) -> Unit,
     onToastPromptDurationSecondsChange: (String) -> Unit,
     onPcExportEnabledChange: (Boolean) -> Unit,
+    onDynamicColorEnabledChange: (Boolean) -> Unit,
     onDismiss: () -> Unit,
     onSave: () -> Unit,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
+        icon = {
+            Icon(
+                imageVector = Icons.Filled.Settings,
+                contentDescription = null,
+            )
+        },
         title = { Text("设置") },
         text = {
             Column(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                OutlinedTextField(
-                    value = regex,
-                    onValueChange = onRegexChange,
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("验证码匹配正则") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Checkbox(
+                SettingsGroup(title = "识别") {
+                    OutlinedTextField(
+                        value = regex,
+                        onValueChange = onRegexChange,
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("验证码匹配正则") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
+                    )
+                }
+                SettingsGroup(title = "外观") {
+                    SettingsSwitchRow(
+                        icon = Icons.Filled.Tune,
+                        title = "动态取色",
+                        checked = dynamicColorEnabled,
+                        onCheckedChange = onDynamicColorEnabledChange,
+                    )
+                }
+                SettingsGroup(title = "填入") {
+                    SettingsSwitchRow(
+                        icon = Icons.Filled.ContentPaste,
+                        title = "启用自动填入",
                         checked = clipboardBridgeEnabled,
                         onCheckedChange = onClipboardBridgeEnabledChange,
                     )
-                    Text(
-                        text = "启用自动填入",
-                        style = MaterialTheme.typography.bodyLarge,
-                    )
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Checkbox(
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    SettingsSwitchRow(
+                        icon = Icons.Filled.Tune,
+                        title = "半自动填入",
                         checked = semiAutoEnabled,
                         onCheckedChange = onSemiAutoEnabledChange,
                     )
-                    Text(
-                        text = "半自动填入",
-                        style = MaterialTheme.typography.bodyLarge,
+                    OutlinedTextField(
+                        value = semiAutoKeepTailLength,
+                        onValueChange = onSemiAutoKeepTailLengthChange,
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("最后几位不填") },
+                        singleLine = true,
+                        enabled = semiAutoEnabled,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     )
                 }
-                OutlinedTextField(
-                    value = semiAutoKeepTailLength,
-                    onValueChange = onSemiAutoKeepTailLengthChange,
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("最后几位不填") },
-                    singleLine = true,
-                    enabled = semiAutoEnabled,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Checkbox(
+                SettingsGroup(title = "提示与导出") {
+                    SettingsSwitchRow(
+                        icon = Icons.Filled.Notifications,
+                        title = "收到验证码提示",
                         checked = toastPromptEnabled,
                         onCheckedChange = onToastPromptEnabledChange,
                     )
-                    Text(
-                        text = "收到验证码提示",
-                        style = MaterialTheme.typography.bodyLarge,
+                    OutlinedTextField(
+                        value = toastPromptDurationSeconds,
+                        onValueChange = onToastPromptDurationSecondsChange,
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("提示秒数") },
+                        singleLine = true,
+                        enabled = toastPromptEnabled,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     )
-                }
-                OutlinedTextField(
-                    value = toastPromptDurationSeconds,
-                    onValueChange = onToastPromptDurationSecondsChange,
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("提示秒数") },
-                    singleLine = true,
-                    enabled = toastPromptEnabled,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Checkbox(
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    SettingsSwitchRow(
+                        icon = Icons.Filled.Computer,
+                        title = "导出给电脑",
                         checked = pcExportEnabled,
                         onCheckedChange = onPcExportEnabledChange,
-                    )
-                    Text(
-                        text = "导出给电脑",
-                        style = MaterialTheme.typography.bodyLarge,
                     )
                 }
             }
@@ -814,6 +1007,70 @@ private fun SettingsDialog(
             }
         },
     )
+}
+
+@Composable
+private fun SettingsGroup(
+    title: String,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(18.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        ) {
+            Column(
+                modifier = Modifier.padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                content = content,
+            )
+        }
+    }
+}
+
+@Composable
+private fun SettingsSwitchRow(
+    icon: ImageVector,
+    title: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Row(
+            modifier = Modifier.weight(1f),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(22.dp),
+            )
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+        }
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+        )
+    }
 }
 
 private fun formatTime(timestamp: Long): String {

@@ -30,6 +30,7 @@ public final class CodeStore {
     private static final String KEY_TOAST_PROMPT_ENABLED = "toast_prompt_enabled";
     private static final String KEY_TOAST_PROMPT_DURATION_SECONDS = "toast_prompt_duration_seconds";
     private static final String KEY_PC_EXPORT_ENABLED = "pc_export_enabled";
+    private static final String KEY_DYNAMIC_COLOR_ENABLED = "dynamic_color_enabled";
     private static final String KEY_PENDING_CODE = "pending_code";
     private static final String KEY_PENDING_CODE_SAVED_AT_MS = "pending_code_saved_at_ms";
     private static final String KEY_DIAG_ENTRY = "diag_entry";
@@ -295,6 +296,16 @@ public final class CodeStore {
     public static void setPcExportEnabled(Context context, boolean enabled) {
         prefs(context).edit()
                 .putBoolean(KEY_PC_EXPORT_ENABLED, enabled)
+                .apply();
+    }
+
+    public static boolean isDynamicColorEnabled(Context context) {
+        return prefs(context).getBoolean(KEY_DYNAMIC_COLOR_ENABLED, true);
+    }
+
+    public static void setDynamicColorEnabled(Context context, boolean enabled) {
+        prefs(context).edit()
+                .putBoolean(KEY_DYNAMIC_COLOR_ENABLED, enabled)
                 .apply();
     }
 

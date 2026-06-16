@@ -1,19 +1,31 @@
 # 短信验证码助手 / SMS OTP Helper
 
+[![Release](https://img.shields.io/badge/release-v1.2.1-555555)](https://github.com/Fieldtrans/sms-otp-helper/releases/latest)
+[![Release APK](https://github.com/Fieldtrans/sms-otp-helper/actions/workflows/release.yml/badge.svg)](https://github.com/Fieldtrans/sms-otp-helper/actions/workflows/release.yml)
+[![Download APK](https://img.shields.io/badge/download-APK-555555)](https://github.com/Fieldtrans/sms-otp-helper/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/Fieldtrans/sms-otp-helper/total?label=downloads)](https://github.com/Fieldtrans/sms-otp-helper/releases)
+[![Android](https://img.shields.io/badge/Android-10%2B-3DDC84?logo=android&logoColor=white)](https://developer.android.com/)
+[![LSPosed](https://img.shields.io/badge/LSPosed-module-6f42c1)](https://github.com/LSPosed/LSPosed)
+
+**语言 / Language:** 中文
+
+[下载 APK](https://github.com/Fieldtrans/sms-otp-helper/releases/latest) | [发布页](https://github.com/Fieldtrans/sms-otp-helper/releases) | [项目截图](docs/images/app-home.jpg)
+
 短信验证码助手是一个 LSPosed 模块，用于从短信或短信通知中提取验证码，并通过当前输入法自动填入。验证码会临时写入剪贴板，并在生成 90 秒后清理。
 
 ![应用首页](docs/images/app-home.jpg)
 
 ## 正式版说明
 
-- 当前 Android 版本：`1.2.0`
+- 当前 Android 版本：`1.2.1`
 - 当前 Windows 辅助程序版本：`1.2.1`
-- 下载 APK：[sms-otp-helper-v1.2.0.apk](releases/sms-otp-helper-v1.2.0.apk)
-- 下载 Windows 辅助程序：[SmsOtpHelper.Win-v1.2.1.exe](releases/SmsOtpHelper.Win-v1.2.1.exe)
+- 下载 APK：[GitHub Releases](https://github.com/Fieldtrans/sms-otp-helper/releases/latest)
+- 下载 Windows 辅助程序：[SmsOtpHelper.Win-v1.2.1.exe](https://github.com/Fieldtrans/sms-otp-helper/releases/latest)
 - 需要 Android 10+。
 - 需要在 LSPosed 中勾选短信 App 和当前输入法 App。
 - 安装或升级后建议重启手机，或至少强行停止短信 App 与当前输入法进程。
-- 设置里可以开启“半自动填入”，默认保留验证码最后 2 位不填。例如 `123456` 会自动输入 `1234`。
+- 设置里可以开启“半自动填入”，可以保留验证码最后 1 位或 2 位不填。例如 `123456` 保留 2 位时会自动输入 `1234`。
+- 设置里可以开启或关闭“动态取色”；开启时跟随系统 Material You 色板，关闭时使用 App 固定色盘。
 - 设置里可以关闭收到验证码时的 Toast 提示，或调整提示秒数。
 - 设置里可以开启“导出给电脑”，验证码会写入手机 `Download/SMS/latest_otp.txt`，供 Windows 辅助程序读取。
 
@@ -38,13 +50,15 @@
 
 正式版 APK：
 
-[`releases/sms-otp-helper-v1.2.0.apk`](releases/sms-otp-helper-v1.2.0.apk)
+[GitHub Releases](https://github.com/Fieldtrans/sms-otp-helper/releases/latest)
 
 Windows 辅助程序：
 
-[`releases/SmsOtpHelper.Win-v1.2.1.exe`](releases/SmsOtpHelper.Win-v1.2.1.exe)
+[GitHub Releases](https://github.com/Fieldtrans/sms-otp-helper/releases/latest)
 
 历史版本：
+
+[`releases/sms-otp-helper-v1.2.0.apk`](releases/sms-otp-helper-v1.2.0.apk)
 
 [`releases/SmsOtpHelper.Win-v1.2.0.exe`](releases/SmsOtpHelper.Win-v1.2.0.exe)
 
@@ -56,7 +70,7 @@ Windows 辅助程序：
 
 APK SHA256：
 
-`7D65F90607F76568834F09AC8B410A956CEF6AB55CE59B757EBA0FCFFFCCBE10`
+`F616DD816A5D0955BE2C9978C9703A4C2FC9B9C599D262BC39B9F26E799679E3`
 
 Windows exe SHA256：
 

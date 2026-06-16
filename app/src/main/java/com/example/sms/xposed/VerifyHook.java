@@ -42,6 +42,8 @@ public class VerifyHook implements IXposedHookLoadPackage {
     private static final String SELF_PACKAGE = "com.example.sms";
     private static final String CLIP_LABEL_PREFIX = "CodeDelayLSP:";
     private static final String CLIP_FILLED_MARK = "filled:";
+    private static final String CLIP_SEMI_AUTO_MARK = "semi:";
+    private static final String CLIP_FULL_AUTO_MARK = "full";
     private static final long DEFAULT_DELAY_MS = 1200L;
     private static final long CLIPBOARD_CHANGE_DELAY_MS = 250L;
     private static final long DUPLICATE_WINDOW_MS = 12_000L;
@@ -362,7 +364,8 @@ public class VerifyHook implements IXposedHookLoadPackage {
                 return;
             }
             long createdAtMs = System.currentTimeMillis();
-            String label = buildClipLabel(createdAtMs);
+            FillMode fillMode = readFillModeFromPrefs();
+            String label = buildClipLabel(createdAtMs, fillMode);
             clipboard.setPrimaryClip(ClipData.newPlainText(label, code));
             scheduleManagedClipboardClear(context, createdAtMs);
             notifyModuleApp(context, code, text);
@@ -422,13 +425,13 @@ public class VerifyHook implements IXposedHookLoadPackage {
             if (clipboardOtp.isEmpty() || isRecentlyFilled(clipboardOtp.key)) {
                 return;
             }
-            String fillCode = buildFillCode(clipboardOtp.code);
+            String fillCode = buildFillCode(clipboardOtp.code, clipboardOtp.fillMode);
             if (TextUtils.isEmpty(fillCode)) {
                 return;
             }
             if (inputConnection.commitText(fillCode, 1)) {
                 rememberFilled(clipboardOtp.key);
-                markManagedClipboardFilled(context, clipboardOtp.code);
+                markManagedClipboardFilled(context, clipboardOtp.code, clipboardOtp.fillMode);
                 notifyCodeFilled(context, clipboardOtp.code);
             }
         }, Math.max(0L, delayMs));
@@ -485,7 +488,7 @@ public class VerifyHook implements IXposedHookLoadPackage {
             if (TextUtils.isEmpty(code)) {
                 return ClipboardOtp.EMPTY;
             }
-            return new ClipboardOtp(code, meta.createdAtMs + ":" + code);
+            return new ClipboardOtp(code, meta.createdAtMs + ":" + code, meta.fillMode);
         } catch (Throwable ignored) {
             return ClipboardOtp.EMPTY;
         }
@@ -506,7 +509,7 @@ public class VerifyHook implements IXposedHookLoadPackage {
         }
     }
 
-    private void markManagedClipboardFilled(Context context, String code) {
+    private void markManagedClipboardFilled(Context context, String code, FillMode fillMode) {
         try {
             ClipboardManager clipboard = (ClipboardManager) context.getSystemService(Context.CLIPBOARD_SERVICE);
             if (clipboard == null || !clipboard.hasPrimaryClip()) {
@@ -522,7 +525,11 @@ public class VerifyHook implements IXposedHookLoadPackage {
                 clearManagedClipboardIfSame(context, createdAtMs);
                 return;
             }
-            clipboard.setPrimaryClip(ClipData.newPlainText(buildFilledClipLabel(createdAtMs), code == null ? "" : code));
+            FillMode safeFillMode = fillMode == null || !fillMode.hasConfig ? meta.fillMode : fillMode;
+            clipboard.setPrimaryClip(ClipData.newPlainText(
+                    buildFilledClipLabel(createdAtMs, safeFillMode),
+                    code == null ? "" : code
+            ));
             scheduleManagedClipboardClear(context, createdAtMs);
         } catch (Throwable ignored) {
         }
@@ -641,22 +648,30 @@ public class VerifyHook implements IXposedHookLoadPackage {
         return modulePrefs == null || modulePrefs.getBoolean(CodeStore.KEY_CLIPBOARD_BRIDGE_ENABLED, true);
     }
 
-    private String buildFillCode(String code) {
+    private String buildFillCode(String code, FillMode fillMode) {
+        if (fillMode != null && fillMode.hasConfig) {
+            return CodeStore.applySemiAuto(code, fillMode.semiAutoEnabled, fillMode.keepTailLength);
+        }
+        FillMode prefsFillMode = readFillModeFromPrefs();
+        return CodeStore.applySemiAuto(code, prefsFillMode.semiAutoEnabled, prefsFillMode.keepTailLength);
+    }
+
+    private FillMode readFillModeFromPrefs() {
         reloadPrefs();
         boolean semiAutoEnabled = modulePrefs != null
                 && modulePrefs.getBoolean(CodeStore.KEY_SEMI_AUTO_ENABLED, false);
         int keepTailLength = modulePrefs == null
                 ? 2
                 : modulePrefs.getInt(CodeStore.KEY_SEMI_AUTO_KEEP_TAIL_LENGTH, 2);
-        return CodeStore.applySemiAuto(code, semiAutoEnabled, keepTailLength);
+        return new FillMode(true, semiAutoEnabled, clampKeepTailLength(keepTailLength));
     }
 
-    private String buildClipLabel(long createdAtMs) {
-        return CLIP_LABEL_PREFIX + createdAtMs;
+    private String buildClipLabel(long createdAtMs, FillMode fillMode) {
+        return CLIP_LABEL_PREFIX + buildFillModeLabel(fillMode) + ":" + createdAtMs;
     }
 
-    private String buildFilledClipLabel(long createdAtMs) {
-        return CLIP_LABEL_PREFIX + CLIP_FILLED_MARK + createdAtMs;
+    private String buildFilledClipLabel(long createdAtMs, FillMode fillMode) {
+        return CLIP_LABEL_PREFIX + CLIP_FILLED_MARK + buildFillModeLabel(fillMode) + ":" + createdAtMs;
     }
 
     private ClipMeta parseClipMeta(ClipDescription description) {
@@ -669,6 +684,7 @@ public class VerifyHook implements IXposedHookLoadPackage {
         }
         String payload = label.substring(CLIP_LABEL_PREFIX.length());
         boolean isFilled = payload.startsWith(CLIP_FILLED_MARK);
+        String metadata = isFilled ? payload.substring(CLIP_FILLED_MARK.length()) : payload;
         int separator = payload.lastIndexOf(':');
         String createdAtText = separator < 0 ? payload : payload.substring(separator + 1);
         long createdAtMs = 0L;
@@ -676,32 +692,81 @@ public class VerifyHook implements IXposedHookLoadPackage {
             createdAtMs = Long.parseLong(createdAtText.trim());
         } catch (Throwable ignored) {
         }
-        return new ClipMeta(true, isFilled, createdAtMs);
+        return new ClipMeta(true, isFilled, createdAtMs, parseFillMode(metadata));
+    }
+
+    private String buildFillModeLabel(FillMode fillMode) {
+        if (fillMode == null || !fillMode.hasConfig || !fillMode.semiAutoEnabled) {
+            return CLIP_FULL_AUTO_MARK;
+        }
+        return CLIP_SEMI_AUTO_MARK + clampKeepTailLength(fillMode.keepTailLength);
+    }
+
+    private FillMode parseFillMode(String metadata) {
+        if (TextUtils.isEmpty(metadata)) {
+            return FillMode.EMPTY;
+        }
+        if (CLIP_FULL_AUTO_MARK.equals(metadata) || metadata.startsWith(CLIP_FULL_AUTO_MARK + ":")) {
+            return new FillMode(true, false, 0);
+        }
+        if (metadata.startsWith(CLIP_SEMI_AUTO_MARK)) {
+            int valueStart = CLIP_SEMI_AUTO_MARK.length();
+            int valueEnd = metadata.indexOf(':', valueStart);
+            String value = valueEnd < 0 ? metadata.substring(valueStart) : metadata.substring(valueStart, valueEnd);
+            try {
+                return new FillMode(true, true, clampKeepTailLength(Integer.parseInt(value.trim())));
+            } catch (Throwable ignored) {
+                return new FillMode(true, true, 2);
+            }
+        }
+        return FillMode.EMPTY;
+    }
+
+    private int clampKeepTailLength(int keepTailLength) {
+        return Math.max(0, Math.min(8, keepTailLength));
     }
 
     private static final class ClipMeta {
-        private static final ClipMeta EMPTY = new ClipMeta(false, false, 0L);
+        private static final ClipMeta EMPTY = new ClipMeta(false, false, 0L, FillMode.EMPTY);
 
         private final boolean isManaged;
         private final boolean isFilled;
         private final long createdAtMs;
+        private final FillMode fillMode;
 
-        private ClipMeta(boolean isManaged, boolean isFilled, long createdAtMs) {
+        private ClipMeta(boolean isManaged, boolean isFilled, long createdAtMs, FillMode fillMode) {
             this.isManaged = isManaged;
             this.isFilled = isFilled;
             this.createdAtMs = createdAtMs;
+            this.fillMode = fillMode == null ? FillMode.EMPTY : fillMode;
+        }
+    }
+
+    private static final class FillMode {
+        private static final FillMode EMPTY = new FillMode(false, false, 0);
+
+        private final boolean hasConfig;
+        private final boolean semiAutoEnabled;
+        private final int keepTailLength;
+
+        private FillMode(boolean hasConfig, boolean semiAutoEnabled, int keepTailLength) {
+            this.hasConfig = hasConfig;
+            this.semiAutoEnabled = semiAutoEnabled;
+            this.keepTailLength = keepTailLength;
         }
     }
 
     private static final class ClipboardOtp {
-        private static final ClipboardOtp EMPTY = new ClipboardOtp("", "");
+        private static final ClipboardOtp EMPTY = new ClipboardOtp("", "", FillMode.EMPTY);
 
         private final String code;
         private final String key;
+        private final FillMode fillMode;
 
-        private ClipboardOtp(String code, String key) {
+        private ClipboardOtp(String code, String key, FillMode fillMode) {
             this.code = code == null ? "" : code;
             this.key = key == null ? "" : key;
+            this.fillMode = fillMode == null ? FillMode.EMPTY : fillMode;
         }
 
         private boolean isEmpty() {

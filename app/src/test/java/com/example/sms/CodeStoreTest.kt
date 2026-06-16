@@ -91,6 +91,11 @@ class CodeStoreTest {
     }
 
     @Test
+    fun applySemiAuto_keepsOnlyLastDigitUnfilled() {
+        assertEquals("12345", CodeStore.applySemiAuto("123456", true, 1))
+    }
+
+    @Test
     fun applySemiAuto_returnsOriginalWhenTailLengthIsZero() {
         assertEquals("123456", CodeStore.applySemiAuto("123456", true, 0))
     }

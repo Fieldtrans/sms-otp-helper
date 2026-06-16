@@ -11,9 +11,9 @@
 
 [下载 APK](https://github.com/Fieldtrans/sms-otp-helper/releases/latest) | [发布页](https://github.com/Fieldtrans/sms-otp-helper/releases) | [项目截图](docs/images/app-home.jpg)
 
-短信验证码助手是一个 LSPosed 模块，用于从短信或短信通知中提取验证码，并通过当前输入法自动填入。验证码会临时写入剪贴板，并在生成 90 秒后清理。
+短信验证码助手是一个面向 HyperOS 3 测试通过的 LSPosed 模块，用于从短信或短信通知中提取验证码，并通过当前输入法自动填入。验证码会临时写入剪贴板，并在生成 90 秒后清理。
 
-![应用首页](docs/images/app-home.jpg)
+<img src="docs/images/app-home.jpg" alt="短信验证码助手首页" width="360">
 
 ## 正式版说明
 
@@ -21,6 +21,7 @@
 - 当前 Windows 辅助程序版本：`1.2.1`
 - 下载 APK：[GitHub Releases](https://github.com/Fieldtrans/sms-otp-helper/releases/latest)
 - 下载 Windows 辅助程序：[SmsOtpHelper.Win-v1.2.1.exe](https://github.com/Fieldtrans/sms-otp-helper/releases/latest)
+- 面向 HyperOS 3 测试通过。
 - 需要 Android 10+。
 - 需要在 LSPosed 中勾选短信 App 和当前输入法 App。
 - 安装或升级后建议重启手机，或至少强行停止短信 App 与当前输入法进程。
